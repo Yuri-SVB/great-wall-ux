@@ -1,0 +1,3 @@
+[submodule "great-wall-docs"]
+	path = great-wall-docs
+	url = git@github.com-yuri-svb:yuri-svb/great-wall-docs.git
