@@ -126,12 +126,6 @@ class _HueWheelPainter extends CustomPainter {
 
     // Hub.
     canvas.drawCircle(c, r * 0.22, Paint()..color = Colors.black87);
-    // Top selection marker.
-    canvas.drawCircle(
-      Offset(c.dx, 6),
-      4,
-      Paint()..color = Colors.white,
-    );
   }
 
   @override
