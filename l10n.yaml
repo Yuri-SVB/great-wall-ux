@@ -1,0 +1,7 @@
+arb-dir: lib/src/l10n
+template-arb-file: great_wall_ux_en.arb
+output-localization-file: great_wall_ux_localizations.dart
+output-class: GreatWallUxL10n
+output-dir: lib/src/l10n/generated
+synthetic-package: false
+nullable-getter: false

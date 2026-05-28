@@ -1,0 +1,20 @@
+name: great_wall_ux_example
+description: Minimal host app showing how to wire great_wall_ux into a Flutter app.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  great_wall_ux:
+    path: ../
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

@@ -1,0 +1,23 @@
+{
+  "@@locale": "en",
+  "canvasSemanticLabel": "Fractal canvas",
+  "@canvasSemanticLabel": {
+    "description": "Accessibility label for the fractal canvas. The canvas contents are deliberately not described to assistive technology."
+  },
+  "paletteOfficialBadge": "Official",
+  "@paletteOfficialBadge": {
+    "description": "Badge shown next to official, frozen palettes."
+  },
+  "paletteUnofficialWarning": "This palette is not part of the official set. Switching to it changes the colour mapping and may reduce recognition of paths you have memorised.",
+  "@paletteUnofficialWarning": {
+    "description": "Warning shown before applying a non-official palette."
+  },
+  "gradeAgain": "Again",
+  "gradeHard": "Hard",
+  "gradeGood": "Good",
+  "gradeEasy": "Easy",
+  "@gradeAgain": {"description": "Spaced-repetition grade: failed to locate one or more points."},
+  "@gradeHard": {"description": "Spaced-repetition grade: found points but with hesitation."},
+  "@gradeGood": {"description": "Spaced-repetition grade: found points with reasonable confidence."},
+  "@gradeEasy": {"description": "Spaced-repetition grade: identified points immediately."}
+}

@@ -1,0 +1,31 @@
+name: great_wall_ux
+description: >-
+  Rendering, palettes, and interaction layer for the Great Wall fractal
+  encoder. The visual and interaction surface; the determinism-critical
+  engine itself lives in great-wall-core.
+version: 0.0.1
+repository: https://github.com/yuri-svb/great-wall-ux
+publish_to: none
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  shaders:
+    - shaders/fractal.frag
+
+  # Localisation is configured via l10n.yaml; .arb files live in lib/src/l10n.
+  generate: true
