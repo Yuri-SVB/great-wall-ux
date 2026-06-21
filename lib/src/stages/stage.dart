@@ -1,22 +1,29 @@
 import 'package:flutter/foundation.dart';
 
-/// Which of the two pipeline stages a canvas is rendering.
+/// Which kind of fractal a canvas is rendering: the pure canonical Burning Ship,
+/// or an `(o, p, q)`-perturbed one.
 ///
-/// See `great-wall-docs/great-wallet/ARCHITECTURE.md` §"Two-Stage Pipeline".
+/// Both render paths remain available to consumers of this library. Note that
+/// the Great Wall *chained* protocol with a text Stage 0 no longer uses a shared
+/// canonical fractal at all — every chain fractal is derived from the Stage-0
+/// salt/pepper plus the preceding points, so it is rendered through the
+/// perturbed path with its own reservoirs. The canonical path ([stage1]) is
+/// kept for the standalone viewer / examples and any non-chained use.
 enum Stage {
   /// Canonical Burning Ship fractal. Parameters are fixed protocol constants
-  /// (no `StageParameters` required).
+  /// (no `StageParameters` required). Not used by the chained wallet flow.
   stage1,
 
-  /// User-specific perturbation parameterised by `(o, p, q)`.
+  /// A chain-derived, user-specific perturbation parameterised by `(o, p, q)`.
   stage2,
 }
 
-/// Stage-2 perturbation parameters.
+/// A chained stage's perturbation parameters.
 ///
-/// `(o, p, q)` is the deterministic output of `Argon2(stage-1 bits)`. They
-/// exist only as ephemeral state during a rendering session — the UX layer
-/// never persists them, and never displays them to the user.
+/// `(o, p, q)` is the deterministic output of the memory-hard chain over all
+/// preceding points (`SHA-256(Argon2^N(points 0..k-1))`). They exist only as
+/// ephemeral state during a rendering session — the UX layer never persists
+/// them, and never displays them to the user.
 @immutable
 class StageParameters {
   const StageParameters({required this.o, required this.p, required this.q});
