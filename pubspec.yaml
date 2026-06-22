@@ -17,6 +17,9 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: ^0.20.2
+  # Low-latency playback of the short bundled UI sound cues. Broad platform
+  # coverage (desktop-first Linux/macOS/Windows, mobile, web).
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -36,6 +39,13 @@ flutter:
         - asset: assets/fonts/UbuntuMono-Regular.ttf
         - asset: assets/fonts/UbuntuMono-Bold.ttf
           weight: 700
+
+  # Short UI sound cues (synthesised homage; see assets/sounds/README.md).
+  assets:
+    - assets/sounds/click.wav
+    - assets/sounds/select.wav
+    - assets/sounds/confirm.wav
+    - assets/sounds/deny.wav
 
   # Localisation is configured via l10n.yaml; .arb files live in lib/src/l10n.
   generate: true

@@ -45,12 +45,15 @@ class _HomeState extends State<_Home> {
     ),
   );
   final BrightnessController _brightness = BrightnessController();
+  final SoundBoard _sounds = SoundBoard();
   HueOffset _hue = kDefaultHue;
+  bool _muted = false;
 
   @override
   void dispose() {
     _controller.dispose();
     _brightness.dispose();
+    _sounds.dispose();
     super.dispose();
   }
 
@@ -68,7 +71,12 @@ class _HomeState extends State<_Home> {
               brightness: _brightness,
               stage: Stage.stage1,
               semanticLabel: 'Fractal canvas',
+              sounds: _sounds,
               onSelect: (FractalSelection _) {
+                // The canvas already played the click cue; the app plays the
+                // outcome cue once it knows the decode result. The demo
+                // source has no decode, so we treat every tap as a commit.
+                _sounds.play(UiSound.select);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Point selected')),
                 );
@@ -94,6 +102,13 @@ class _HomeState extends State<_Home> {
                   TextButton(
                     onPressed: _brightness.reset,
                     child: const Text('Reset brightness'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => setState(() {
+                      _muted = _sounds.toggleMute();
+                    }),
+                    icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+                    label: Text(_muted ? 'Sound off' : 'Sound on'),
                   ),
                 ],
               ),

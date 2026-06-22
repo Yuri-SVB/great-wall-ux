@@ -6,6 +6,7 @@
 /// submodule so the spec ships next to the implementation.
 library;
 
+export 'src/audio/sound_board.dart';
 export 'src/canvas/escape_count_source.dart';
 export 'src/canvas/fractal_canvas.dart';
 export 'src/canvas/overlay.dart';

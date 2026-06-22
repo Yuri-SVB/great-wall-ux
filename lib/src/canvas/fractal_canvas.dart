@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../audio/sound_board.dart';
 import '../gestures/pan_zoom_controller.dart';
 import '../gestures/select_mode.dart';
 import '../palette/palette.dart';
@@ -47,6 +48,7 @@ class FractalCanvas extends StatefulWidget {
     this.maxIterations = 256,
     this.overlays = CanvasOverlays.empty,
     this.onSelect,
+    this.sounds,
     this.debugBisectionOverlay = false,
     this.semanticLabel,
     this.backPressure = const BackPressureConfig(),
@@ -68,6 +70,13 @@ class FractalCanvas extends StatefulWidget {
   final int maxIterations;
   final CanvasOverlays overlays;
   final ValueChanged<FractalSelection>? onSelect;
+
+  /// Optional UI sound board. When supplied, a tap on the canvas plays the
+  /// [UiSound.click] cue (the "sonoplasty for clicking"). Selection-outcome
+  /// cues (select/confirm/deny) are dispatched by the consuming app from its
+  /// [onSelect] handler, where the decode result is known.
+  final SoundBoard? sounds;
+
   final bool debugBisectionOverlay;
   final String? semanticLabel;
   final BackPressureConfig backPressure;
@@ -285,6 +294,7 @@ class _FractalCanvasState extends State<FractalCanvas> {
   }
 
   void _handleTap(TapUpDetails details) {
+    widget.sounds?.play(UiSound.click);
     final ViewportMath m = ViewportMath(widget.controller.viewport);
     final Offset p = details.localPosition;
     final (double re, double im) = m.pixelToCoord(p.dx, p.dy);
