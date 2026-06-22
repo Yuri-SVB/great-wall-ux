@@ -45,7 +45,7 @@ class _HomeState extends State<_Home> {
     ),
   );
   final BrightnessController _brightness = BrightnessController();
-  HueOffset _hue = HueOffset.red;
+  HueOffset _hue = kDefaultHue;
 
   @override
   void dispose() {
@@ -64,7 +64,7 @@ class _HomeState extends State<_Home> {
             child: FractalCanvas(
               source: _source,
               controller: _controller,
-              palette: Palette.classicWithHue(_hue),
+              palette: Palette.forHue(_hue),
               brightness: _brightness,
               stage: Stage.stage1,
               semanticLabel: 'Fractal canvas',

@@ -95,13 +95,16 @@ class _HueWheelPainter extends CustomPainter {
     for (int i = 0; i < n; i++) {
       // Sector i spans clockwise from the top marker.
       final double start = -math.pi / 2 + i * sweep;
+      // Full-saturation swatch so each sector previews the scheme's actual
+      // hue (the palette is single-hue, full-saturation; only brightness
+      // varies within a scheme).
       final Paint fill = Paint()
         ..style = PaintingStyle.fill
-        ..color = HSLColor.fromAHSL(
+        ..color = HSVColor.fromAHSV(
           1.0,
           (HueOffset.values[i].degrees.toDouble()) % 360.0,
-          0.6,
-          0.5,
+          1.0,
+          1.0,
         ).toColor();
       canvas.drawArc(
         Rect.fromCircle(center: c, radius: r),

@@ -3,14 +3,17 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
-/// One of the six hue rotations applied to the Classic base palette.
+/// One of the six selectable hues for the fractal palette.
 ///
 /// The set is fixed by `great-wall-docs/great-wall-ux/TECH_STACK.md`
-/// §"Locked sub-decisions / Palette set". Six rotations at 60° spacing,
-/// named by dominant hue. The set ossifies the palette surface: users
-/// switch by an explicit, labelled action, never by cycle-on-keypress, and
-/// the variants are visually distinct enough that the user cannot drift
-/// between them by accident.
+/// §"Locked sub-decisions / Palette set": six hues evenly spaced around the
+/// wheel (60° apart), named by hue. Within any one scheme the hue is
+/// **constant** — only brightness varies — so the user reads detail by a
+/// single perceptual dimension rather than by an arbitrary, distracting hue
+/// ramp. The six-option set ossifies the palette surface: users switch by an
+/// explicit, labelled wheel action, never by cycle-on-keypress, and the
+/// variants are distinct enough that the user cannot drift between them by
+/// accident.
 enum HueOffset {
   red(0),
   yellow(60),
@@ -21,56 +24,39 @@ enum HueOffset {
 
   const HueOffset(this.degrees);
 
-  /// Hue rotation in degrees applied to the Classic base palette.
+  /// HSV hue in degrees for this scheme.
   final int degrees;
 }
 
-/// Frozen escape-count → RGBA mapping.
+/// The default hue: green — a green-on-black terminal allusion, and the
+/// hue requested as the default in `great-wall-docs`.
+const HueOffset kDefaultHue = HueOffset.green;
+
+/// Brightness ramp shaping. A mild gamma lift keeps the low escape-count
+/// bands (the bulk of the structure hugging the set) from crushing to black,
+/// so brightness stays a legible signal across the whole range. The GPU
+/// brightness-falloff modulation (TECH_STACK.md §"Brightness modulation")
+/// then sculpts which band is most lit; the two compose.
+const double _defaultGamma = 0.85;
+
+/// Opaque black for the inside-the-set entry.
+const int _inside = 0x000000FF;
+
+/// Frozen escape-count → RGBA mapping for one hue.
 ///
-/// The palette surface is the Classic base inherited from `great-wall-core`,
-/// available in the six rotations listed by [HueOffset]. There is no
-/// user-extensible palette loader, no other base palette, and no toggle
-/// for the escape-count transform (the transform is fixed log; see
+/// The palette surface is a **single hue at full saturation** whose
+/// **brightness ramps with the palette index** — i.e. with the (fixed-log)
+/// transformed escape count fed in by the shader. There is no user-extensible
+/// palette loader, no multi-hue base, and no toggle for the escape-count
+/// transform (the transform is fixed log; see
 /// `great-wall-docs/great-wall-ux/TECH_STACK.md`).
 ///
 /// Once a tagged release ships, the escape-count → RGBA mapping of every
-/// variant is frozen forever — the **palette stability** invariant.
+/// hue is frozen forever — the **palette stability** invariant.
 @immutable
 class Palette {
-  /// The Classic palette with no hue rotation. Inherited from
-  /// `great-wall-core`'s `palettes.py` `Classic` scheme.
-  static final Palette classic = Palette._fromStops(
-    id: 'classic',
-    hueOffset: HueOffset.red,
-    stops: const <_ClassicStop>[
-      _ClassicStop(0.000, 0x000000FF),
-      _ClassicStop(0.063, 0x1A237EFF),
-      _ClassicStop(0.188, 0x3949ABFF),
-      _ClassicStop(0.375, 0xF9A825FF),
-      _ClassicStop(0.625, 0xFFD600FF),
-      _ClassicStop(0.860, 0xFFFDE7FF),
-    ],
-    inside: 0x000000FF,
-    tableSize: 256,
-  );
-
-  /// The Classic palette under [hue]. The variant is built deterministically
-  /// from the same stops as [classic], with each stop's hue rotated by
-  /// [HueOffset.degrees] in HSL space before being baked into the LUT.
-  ///
-  /// Caching policy: callers may keep the returned [Palette] around; the
-  /// LUT is immutable and cheap to retain. The library does not maintain
-  /// a singleton cache to avoid coupling lifetime to global state.
-  factory Palette.classicWithHue(HueOffset hue) {
-    if (hue == HueOffset.red) return classic;
-    return Palette._fromStops(
-      id: 'classic-${hue.name}',
-      hueOffset: hue,
-      stops: _classicStops,
-      inside: 0x000000FF,
-      tableSize: 256,
-    );
-  }
+  /// The default scheme (green). Equivalent to `Palette.forHue(kDefaultHue)`.
+  static final Palette green = Palette.forHue(kDefaultHue);
 
   Palette._({
     required this.id,
@@ -78,26 +64,36 @@ class Palette {
     required Uint32List rgba,
   }) : _rgba = rgba;
 
-  factory Palette._fromStops({
-    required String id,
-    required HueOffset hueOffset,
-    required List<_ClassicStop> stops,
-    required int inside,
-    required int tableSize,
+  /// Build the palette for [hue]: a constant-hue, full-saturation ramp whose
+  /// brightness runs from black (lowest escape count) to the full-bright hue
+  /// (highest escaping count). The final entry — the inside-the-set colour —
+  /// is opaque black and is never tinted.
+  ///
+  /// Caching policy: callers may keep the returned [Palette] around; the LUT
+  /// is immutable and cheap to retain. The library does not maintain a
+  /// singleton cache to avoid coupling lifetime to global state.
+  factory Palette.forHue(
+    HueOffset hue, {
+    int tableSize = 256,
+    double gamma = _defaultGamma,
   }) {
     final Uint32List table = Uint32List(tableSize);
-    for (int i = 0; i < tableSize - 1; i++) {
-      final double t = i / (tableSize - 1);
-      table[i] = _rotateHue(_sampleStops(stops, t), hueOffset.degrees);
+    final int last = tableSize - 1; // index reserved for inside-the-set
+    final double hueDeg = hue.degrees.toDouble();
+    for (int i = 0; i < last; i++) {
+      // t in [0, 1] across the escaping entries [0, last - 1].
+      final double t = last > 1 ? i / (last - 1) : 0.0;
+      final double value = math.pow(t, gamma).toDouble();
+      table[i] = _hsvToRgba(hueDeg, 1.0, value);
     }
-    table[tableSize - 1] = inside;
-    return Palette._(id: id, hueOffset: hueOffset, rgba: table);
+    table[last] = _inside;
+    return Palette._(id: 'hue-${hue.name}', hueOffset: hue, rgba: table);
   }
 
-  /// Stable identifier — `"classic"`, `"classic-blue"`, …
+  /// Stable identifier — `"hue-green"`, `"hue-blue"`, …
   final String id;
 
-  /// Which of the six rotations this palette is.
+  /// Which of the six hues this palette is.
   final HueOffset hueOffset;
 
   final Uint32List _rgba;
@@ -117,109 +113,53 @@ class Palette {
   Uint32List get rgbaTable => _rgba;
 }
 
-@immutable
-class _ClassicStop {
-  const _ClassicStop(this.position, this.rgba);
-
-  /// Position along the palette in `[0, 1]`. Position values are decoupled
-  /// from any specific table size so the same stops generate identical
-  /// shapes at any palette resolution.
-  final double position;
-  final int rgba;
-}
-
-const List<_ClassicStop> _classicStops = <_ClassicStop>[
-  _ClassicStop(0.000, 0x000000FF),
-  _ClassicStop(0.063, 0x1A237EFF),
-  _ClassicStop(0.188, 0x3949ABFF),
-  _ClassicStop(0.375, 0xF9A825FF),
-  _ClassicStop(0.625, 0xFFD600FF),
-  _ClassicStop(0.860, 0xFFFDE7FF),
-];
-
-int _sampleStops(List<_ClassicStop> stops, double t) {
-  if (t <= stops.first.position) return stops.first.rgba;
-  if (t >= stops.last.position) return stops.last.rgba;
-  for (int i = 0; i + 1 < stops.length; i++) {
-    final _ClassicStop a = stops[i];
-    final _ClassicStop b = stops[i + 1];
-    if (t >= a.position && t <= b.position) {
-      final double u = (t - a.position) / (b.position - a.position);
-      return _lerpRgba(a.rgba, b.rgba, u);
-    }
+/// Convert HSV (hue in degrees, saturation and value in `[0, 1]`) to a packed
+/// `0xRRGGBBAA` colour with opaque alpha. Kept self-contained so palette
+/// generation has no dependency on Flutter painting types.
+int _hsvToRgba(double hueDeg, double s, double v) {
+  final double h = (hueDeg % 360.0) / 60.0;
+  final int sector = h.floor();
+  final double f = h - sector;
+  final double p = v * (1.0 - s);
+  final double q = v * (1.0 - s * f);
+  final double t = v * (1.0 - s * (1.0 - f));
+  double r;
+  double g;
+  double b;
+  switch (sector % 6) {
+    case 0:
+      r = v;
+      g = t;
+      b = p;
+      break;
+    case 1:
+      r = q;
+      g = v;
+      b = p;
+      break;
+    case 2:
+      r = p;
+      g = v;
+      b = t;
+      break;
+    case 3:
+      r = p;
+      g = q;
+      b = v;
+      break;
+    case 4:
+      r = t;
+      g = p;
+      b = v;
+      break;
+    default:
+      r = v;
+      g = p;
+      b = q;
+      break;
   }
-  return stops.last.rgba;
-}
-
-int _lerpRgba(int a, int b, double t) {
-  final int ar = (a >> 24) & 0xFF;
-  final int ag = (a >> 16) & 0xFF;
-  final int ab = (a >> 8) & 0xFF;
-  final int aa = a & 0xFF;
-  final int br = (b >> 24) & 0xFF;
-  final int bg = (b >> 16) & 0xFF;
-  final int bb = (b >> 8) & 0xFF;
-  final int ba = b & 0xFF;
-  return ((ar + (br - ar) * t).round() << 24) |
-      ((ag + (bg - ag) * t).round() << 16) |
-      ((ab + (bb - ab) * t).round() << 8) |
-      (aa + (ba - aa) * t).round();
-}
-
-/// Rotate an RGBA colour's hue by [degrees] in HSL space, preserving
-/// saturation, lightness, and alpha. Used to produce the five non-Red
-/// variants of the Classic palette from the same stops.
-int _rotateHue(int rgba, int degrees) {
-  if (degrees == 0) return rgba;
-  final int r = (rgba >> 24) & 0xFF;
-  final int g = (rgba >> 16) & 0xFF;
-  final int b = (rgba >> 8) & 0xFF;
-  final int a = rgba & 0xFF;
-
-  final double rf = r / 255.0;
-  final double gf = g / 255.0;
-  final double bf = b / 255.0;
-
-  final double maxC = math.max(rf, math.max(gf, bf));
-  final double minC = math.min(rf, math.min(gf, bf));
-  final double l = (maxC + minC) / 2.0;
-
-  double h = 0.0;
-  double s = 0.0;
-  if (maxC != minC) {
-    final double d = maxC - minC;
-    s = l > 0.5 ? d / (2.0 - maxC - minC) : d / (maxC + minC);
-    if (maxC == rf) {
-      h = (gf - bf) / d + (gf < bf ? 6.0 : 0.0);
-    } else if (maxC == gf) {
-      h = (bf - rf) / d + 2.0;
-    } else {
-      h = (rf - gf) / d + 4.0;
-    }
-    h /= 6.0;
-  }
-
-  h = (h + degrees / 360.0) % 1.0;
-  if (h < 0) h += 1.0;
-
-  final double q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  final double p = 2 * l - q;
-  final double r2 = _hueToChannel(p, q, h + 1 / 3);
-  final double g2 = _hueToChannel(p, q, h);
-  final double b2 = _hueToChannel(p, q, h - 1 / 3);
-
-  return ((r2 * 255).round() << 24) |
-      ((g2 * 255).round() << 16) |
-      ((b2 * 255).round() << 8) |
-      a;
-}
-
-double _hueToChannel(double p, double q, double t) {
-  double tt = t;
-  if (tt < 0) tt += 1;
-  if (tt > 1) tt -= 1;
-  if (tt < 1 / 6) return p + (q - p) * 6 * tt;
-  if (tt < 1 / 2) return q;
-  if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
-  return p;
+  final int ri = (r * 255.0).round().clamp(0, 255);
+  final int gi = (g * 255.0).round().clamp(0, 255);
+  final int bi = (b * 255.0).round().clamp(0, 255);
+  return (ri << 24) | (gi << 16) | (bi << 8) | 0xFF;
 }
