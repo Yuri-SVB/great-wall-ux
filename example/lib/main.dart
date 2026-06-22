@@ -17,7 +17,8 @@ class _App extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'great_wall_ux example',
-      theme: ThemeData.dark(),
+      // Adopt the Great Wall chrome typography (Ubuntu Mono) throughout.
+      theme: GreatWallTypography.themed(ThemeData.dark()),
       home: const _Home(),
     );
   }

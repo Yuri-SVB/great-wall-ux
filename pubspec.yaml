@@ -27,5 +27,15 @@ flutter:
   shaders:
     - shaders/fractal.frag
 
+  # Ubuntu Mono — the monospace face for the chrome surrounding the canvas
+  # (great-wall-docs/great-wall-ux/SCOPE.md §"sober, but game-like").
+  # Ubuntu Font Licence 1.0; see assets/fonts/LICENCE.txt.
+  fonts:
+    - family: UbuntuMono
+      fonts:
+        - asset: assets/fonts/UbuntuMono-Regular.ttf
+        - asset: assets/fonts/UbuntuMono-Bold.ttf
+          weight: 700
+
   # Localisation is configured via l10n.yaml; .arb files live in lib/src/l10n.
   generate: true
