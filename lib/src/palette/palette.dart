@@ -58,6 +58,12 @@ class Palette {
   /// The default scheme (green). Equivalent to `Palette.forHue(kDefaultHue)`.
   static final Palette green = Palette.forHue(kDefaultHue);
 
+  /// Deprecated alias for [green]. The palette is now single-hue and
+  /// brightness-ramped, so the "classic" name no longer fits; kept temporarily
+  /// so existing consumers keep compiling.
+  @Deprecated('Renamed to Palette.green; will be removed before 0.1.0.')
+  static final Palette classic = green;
+
   Palette._({
     required this.id,
     required this.hueOffset,
@@ -89,6 +95,12 @@ class Palette {
     table[last] = _inside;
     return Palette._(id: 'hue-${hue.name}', hueOffset: hue, rgba: table);
   }
+
+  /// Deprecated alias for [Palette.forHue]. Kept so consumers written against
+  /// the previous multi-hue API keep compiling; they now receive the new
+  /// single-hue, brightness-ramped palette for [hue].
+  @Deprecated('Renamed to Palette.forHue; will be removed before 0.1.0.')
+  factory Palette.classicWithHue(HueOffset hue) => Palette.forHue(hue);
 
   /// Stable identifier — `"hue-green"`, `"hue-blue"`, …
   final String id;

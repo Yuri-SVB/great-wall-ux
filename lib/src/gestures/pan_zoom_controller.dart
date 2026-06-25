@@ -24,7 +24,9 @@ class PanZoomController extends ChangeNotifier {
     final double u = ViewportMath(_viewport).unitsPerPixel;
     viewport = _viewport.copyWith(
       centreRe: _viewport.centreRe - dx * u,
-      centreIm: _viewport.centreIm + dy * u,
+      // Imaginary axis increases downward in screen space (see
+      // ViewportMath.pixelToCoord), so a downward drag lowers the centre's im.
+      centreIm: _viewport.centreIm - dy * u,
     );
   }
 

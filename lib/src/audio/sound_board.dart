@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
@@ -41,7 +43,10 @@ class SoundBoard {
         // Resolve assets relative to this package, not the consuming app.
         ..audioCache = AudioCache(prefix: _assetPrefix);
       // Pre-resolve the bundled asset so the first play is not delayed.
-      unawaited(_safe(() => player.setSource(_sourceFor(s))));
+      unawaited(_safe(
+        () => player.setSource(_sourceFor(s)),
+        label: 'preload ${s.asset}',
+      ));
       _players[s] = player;
     }
   }
@@ -68,10 +73,16 @@ class SoundBoard {
     if (_muted) return;
     final AudioPlayer? player = _players[sound];
     if (player == null) return;
-    unawaited(_safe(() async {
-      await player.stop();
-      await player.play(_sourceFor(sound));
-    }));
+    // Replay the already-loaded source: rewind then resume. This is the
+    // low-latency desktop pattern and avoids re-preparing the GStreamer
+    // pipeline on every cue (which on Linux could swallow the playback).
+    unawaited(_safe(
+      () async {
+        await player.seek(Duration.zero);
+        await player.resume();
+      },
+      label: 'play ${sound.asset}',
+    ));
   }
 
   /// Release the underlying players.
@@ -82,14 +93,15 @@ class SoundBoard {
     _players.clear();
   }
 
-  static Future<void> _safe(Future<void> Function() op) async {
+  static Future<void> _safe(Future<void> Function() op, {String label = ''}) async {
     try {
       await op();
     } catch (e) {
       // Audio is best-effort, display-only feedback: never let a cue failure
-      // surface to the user or interrupt interaction.
+      // surface to the user or interrupt interaction. Logged (debug only) so
+      // a silent backend can still be diagnosed.
       if (kDebugMode) {
-        debugPrint('SoundBoard: cue suppressed ($e)');
+        debugPrint('SoundBoard: $label suppressed ($e)');
       }
     }
   }

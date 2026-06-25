@@ -41,8 +41,13 @@ class ViewportMath {
     final double sx = px + 0.5 - viewport.widthPx / 2.0;
     final double sy = py + 0.5 - viewport.heightPx / 2.0;
     final double re = viewport.centreRe + sx * u;
-    // Image-space y grows downward; fractal imaginary axis grows upward.
-    final double im = viewport.centreIm - sy * u;
+    // The displayed raster (great-wall-core's escape-count buffer, drawn by the
+    // canvas shader) has its imaginary axis increasing downward in screen
+    // space. The coordinate mapping must match that exact orientation, or
+    // overlays, pan, and zoom-to-cursor are vertically inverted relative to the
+    // fractal the user sees. (This mapping is what drives markers and gestures;
+    // it does NOT affect how the raster itself is drawn.)
+    final double im = viewport.centreIm + sy * u;
     return (re, im);
   }
 
@@ -53,7 +58,7 @@ class ViewportMath {
   (double, double) coordToPixel(double re, double im) {
     final double u = unitsPerPixel;
     final double sx = (re - viewport.centreRe) / u;
-    final double sy = (viewport.centreIm - im) / u;
+    final double sy = (im - viewport.centreIm) / u;
     final double px = sx + viewport.widthPx / 2.0 - 0.5;
     final double py = sy + viewport.heightPx / 2.0 - 0.5;
     return (px, py);

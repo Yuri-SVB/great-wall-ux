@@ -19,11 +19,14 @@ void main() {
       expect(im, closeTo(0.0, 1e-12));
     });
 
-    test('image y axis is flipped relative to imaginary axis', () {
+    test('imaginary axis increases downward, matching the raster', () {
+      // The coordinate mapping matches the displayed raster's orientation
+      // (im increases downward in screen space), so overlays and gestures
+      // align with the fractal. Top row has the smaller imaginary value.
       const ViewportMath m = ViewportMath(vp);
       final (_, double imTop) = m.pixelToCoord(199.5, 0.5);
       final (_, double imBot) = m.pixelToCoord(199.5, 399.5);
-      expect(imTop, greaterThan(imBot));
+      expect(imTop, lessThan(imBot));
     });
 
     test('pixelToCoord and coordToPixel are inverses', () {
