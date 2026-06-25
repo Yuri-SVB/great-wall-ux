@@ -20,3 +20,4 @@ export 'src/render/brightness_controller.dart';
 export 'src/stages/stage.dart';
 export 'src/theme/typography.dart';
 export 'src/widgets/hue_wheel.dart';
+export 'src/widgets/stage_count_slider.dart';

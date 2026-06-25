@@ -48,6 +48,7 @@ class _HomeState extends State<_Home> {
   final SoundBoard _sounds = SoundBoard();
   HueOffset _hue = kDefaultHue;
   bool _muted = false;
+  int _stages = 4;
 
   @override
   void dispose() {
@@ -93,6 +94,11 @@ class _HomeState extends State<_Home> {
                   HueWheel(
                     value: _hue,
                     onChanged: (HueOffset h) => setState(() => _hue = h),
+                  ),
+                  const SizedBox(height: 24),
+                  StageCountSlider(
+                    value: _stages,
+                    onChanged: (int n) => setState(() => _stages = n),
                   ),
                   const SizedBox(height: 24),
                   const Text(
