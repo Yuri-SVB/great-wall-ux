@@ -3,7 +3,8 @@
 // the actual Burning Ship raster.
 //
 // Demonstrates the locked surface: the GPU colour pipeline, the rotary hue
-// wheel, and L+scroll brightness (a tacit control with no on-screen value).
+// wheel, L+scroll brightness (a tacit control with no on-screen value), and
+// V+Up/Down sound-cue volume (level 0 == muted).
 
 import 'package:flutter/material.dart';
 import 'package:great_wall_ux/great_wall_ux.dart';
@@ -47,7 +48,7 @@ class _HomeState extends State<_Home> {
   final BrightnessController _brightness = BrightnessController();
   final SoundBoard _sounds = SoundBoard();
   HueOffset _hue = kDefaultHue;
-  bool _muted = false;
+  int _volume = kMaxVolumeLevel;
   int _stages = 4;
 
   @override
@@ -73,6 +74,7 @@ class _HomeState extends State<_Home> {
               stage: Stage.stage1,
               semanticLabel: 'Fractal canvas',
               sounds: _sounds,
+              onVolumeChanged: (int level) => setState(() => _volume = level),
               onSelect: (FractalSelection _) {
                 // The canvas already played the click cue; the app plays the
                 // outcome cue once it knows the decode result. The demo
@@ -102,7 +104,8 @@ class _HomeState extends State<_Home> {
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Hold L and scroll to adjust brightness',
+                    'Hold L and scroll to adjust brightness.\n'
+                    'Hold V and press Up/Down to change volume.',
                     textAlign: TextAlign.center,
                   ),
                   TextButton(
@@ -111,10 +114,15 @@ class _HomeState extends State<_Home> {
                   ),
                   TextButton.icon(
                     onPressed: () => setState(() {
-                      _muted = _sounds.toggleMute();
+                      _sounds.toggleMute();
+                      _volume = _sounds.volumeLevel;
                     }),
-                    icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
-                    label: Text(_muted ? 'Sound off' : 'Sound on'),
+                    icon: Icon(
+                      _volume == 0 ? Icons.volume_off : Icons.volume_up,
+                    ),
+                    label: Text(
+                      _volume == 0 ? 'Muted' : 'Volume $_volume/$kMaxVolumeLevel',
+                    ),
                   ),
                 ],
               ),
