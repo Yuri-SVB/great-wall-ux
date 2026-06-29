@@ -3,25 +3,127 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
-/// The UI sound cues. Short, synthesised "futuristic console" blips in the
-/// spirit of late-90s RTS interfaces — tactile feedback for the
-/// "sober, but game-like" surface (`great-wall-docs/great-wall-ux/SCOPE.md`).
+/// A sound-cue theme — a directory of wavs under `assets/sounds/`. Each theme
+/// supplies a file for every [UiSound]; swapping a cue is just replacing its
+/// wav, and adding a theme is just adding a sibling directory (plus a value
+/// here and a pubspec entry). Theme *selection* is deferred — [SoundBoard]
+/// defaults to [sober] for now.
+enum SoundTheme {
+  /// The default, restrained cue set.
+  sober('sober');
+
+  const SoundTheme(this.dir);
+
+  /// Subdirectory under `assets/sounds/` holding this theme's wavs.
+  final String dir;
+}
+
+/// The UI sound cues — the full vocabulary of events the app can voice. Short,
+/// synthesised "futuristic console" blips in the spirit of late-90s RTS
+/// interfaces — tactile feedback for the "sober, but game-like" surface
+/// (`great-wall-docs/great-wall-ux/SCOPE.md`).
+///
+/// Each cue is its own wav, so a cue is changed by simply replacing its file in
+/// the active theme directory. The first cut ships every cue as a copy of one
+/// of the four base primitives (click / select / confirm / deny); they are
+/// meant to diverge over time — that's the point of giving each its own file.
+/// The consuming app maps its events onto these (see the wallet setup screen).
 enum UiSound {
-  /// Any pointer tap on the canvas.
+  // --- Base primitives -------------------------------------------------------
+  /// Generic tap / click (canvas tap, neutral UI press).
   click('click.wav'),
 
-  /// A reference point was committed.
+  /// A reference point was committed (generic affirmative selection).
   select('select.wav'),
 
-  /// A stage decode/encode completed.
+  /// A stage decode/encode completed (generic success).
   confirm('confirm.wav'),
 
-  /// A rejected / invalid action.
-  deny('deny.wav');
+  /// A rejected / invalid action (generic negative).
+  deny('deny.wav'),
+
+  // --- Errors / negatives (copies of deny) -----------------------------------
+  /// Action blocked by a precondition (prior stage lacks a point; stage not yet
+  /// reachable; "recall the earlier stages first").
+  denyBlocked('deny_blocked.wav'),
+
+  /// Not an error, just not yet — inter-stage hashing still running.
+  denyPending('deny_pending.wav'),
+
+  /// A selected point fell where no encodable leaf exists (contracted-away
+  /// area).
+  denyMiss('deny_miss.wav'),
+
+  /// Invalid text input (should be a number; generic invalid).
+  denyInput('deny_input.wav'),
+
+  /// A destructive confirmation is being raised (abort / reset dialog).
+  warn('warn.wav'),
+
+  /// A stage / action was removed or undone (tbd feature).
+  undo('undo.wav'),
+
+  // --- Soft ticks / UI / directional (copies of click) -----------------------
+  /// Very soft "digital interface" tick: a regular keystroke or a corrected
+  /// input.
+  tickSoft('tick_soft.wav'),
+
+  /// A field took keyboard focus.
+  focus('focus.wav'),
+
+  /// Pan / slide of the canvas.
+  slide('slide.wav'),
+
+  /// A "more" adjustment: volume up, zoom in, brightness up.
+  adjustUp('adjust_up.wav'),
+
+  /// A "less" adjustment: volume down, zoom out, brightness down.
+  adjustDown('adjust_down.wav'),
+
+  /// Chrome expanded / maximized.
+  chromeUp('chrome_up.wav'),
+
+  /// Chrome minimized.
+  chromeDown('chrome_down.wav'),
+
+  /// Top-level mode navigation (F1–F5).
+  navMode('nav_mode.wav'),
+
+  /// A toggle turned off (e.g. fast render — deep mode off).
+  modeOff('mode_off.wav'),
+
+  // --- Navigation / selection (copies of select) -----------------------------
+  /// Moved to a stage (entered stage 0 or a fractal stage).
+  navStage('nav_stage.wav'),
+
+  /// Canonical zoom onto a stage's point.
+  navZoom('nav_zoom.wav'),
+
+  /// A point was selected.
+  selectPoint('select_point.wav'),
+
+  /// The selected point was changed (re-selected).
+  changePoint('change_point.wav'),
+
+  /// A toggle turned on (e.g. deep render mode on).
+  modeOn('mode_on.wav'),
+
+  // --- Success / ready (copies of confirm) -----------------------------------
+  /// A new stage became ready (derived).
+  stageReady('stage_ready.wav'),
+
+  /// The final stage / full recall completed.
+  finalReady('final_ready.wav'),
+
+  /// A new intermediary digest became ready (tbd wiring).
+  digestReady('digest_ready.wav'),
+
+  /// A secret was exported to the clipboard (master secret / mnemonic).
+  exportOk('export_ok.wav');
 
   const UiSound(this.asset);
 
-  /// Asset filename under `assets/sounds/` in this package.
+  /// Asset filename under `assets/sounds/<theme>/` in this package.
   final String asset;
 }
 
@@ -51,8 +153,11 @@ const int kMaxVolumeLevel = 10;
 /// One [AudioPlayer] per cue allows the short blips to overlap without one
 /// cutting another off. Construct once per session and [dispose] when done.
 class SoundBoard {
-  SoundBoard({bool muted = false, int volumeLevel = kMaxVolumeLevel})
-      : _level = muted ? 0 : volumeLevel.clamp(0, kMaxVolumeLevel),
+  SoundBoard({
+    bool muted = false,
+    int volumeLevel = kMaxVolumeLevel,
+    this.theme = SoundTheme.sober,
+  })  : _level = muted ? 0 : volumeLevel.clamp(0, kMaxVolumeLevel),
         // Restore target for unmute — never 0, so unmuting always makes sound.
         _preMuteLevel = volumeLevel.clamp(1, kMaxVolumeLevel) {
     for (final UiSound s in UiSound.values) {
@@ -74,11 +179,15 @@ class SoundBoard {
     }
   }
 
+  /// The active cue theme. Fixed at construction for now (selection is a future
+  /// step); cues resolve to `assets/sounds/<theme.dir>/<cue.asset>`.
+  final SoundTheme theme;
+
   /// Cache prefix that points at this package's bundled assets. Combined with
   /// the per-cue path below it yields `packages/great_wall_ux/assets/sounds/…`.
   static const String _assetPrefix = 'packages/great_wall_ux/assets/';
 
-  static AssetSource _sourceFor(UiSound s) => AssetSource('sounds/${s.asset}');
+  AssetSource _sourceFor(UiSound s) => AssetSource('sounds/${theme.dir}/${s.asset}');
 
   final Map<UiSound, AudioPlayer> _players = <UiSound, AudioPlayer>{};
 

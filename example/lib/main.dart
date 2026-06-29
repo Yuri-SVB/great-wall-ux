@@ -68,14 +68,17 @@ class _HomeState extends State<_Home> {
     final bool vHeld =
         HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.keyV);
     if (!vHeld) return KeyEventResult.ignored;
+    final UiSound cue;
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       setState(() => _volume = _sounds.volumeUp());
+      cue = UiSound.adjustUp;
     } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       setState(() => _volume = _sounds.volumeDown());
+      cue = UiSound.adjustDown;
     } else {
       return KeyEventResult.ignored;
     }
-    _sounds.play(UiSound.click); // confirm the new level audibly
+    _sounds.play(cue); // confirm the new level audibly
     return KeyEventResult.handled;
   }
 

@@ -41,11 +41,10 @@ flutter:
           weight: 700
 
   # Short UI sound cues (synthesised homage; see assets/sounds/README.md).
+  # Declared as a directory so dropping in / replacing a cue wav needs no
+  # pubspec edit. Add a sibling line per future theme directory.
   assets:
-    - assets/sounds/click.wav
-    - assets/sounds/select.wav
-    - assets/sounds/confirm.wav
-    - assets/sounds/deny.wav
+    - assets/sounds/sober/
 
   # Localisation is configured via l10n.yaml; .arb files live in lib/src/l10n.
   generate: true
