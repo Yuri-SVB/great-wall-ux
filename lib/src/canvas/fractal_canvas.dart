@@ -34,6 +34,11 @@ const String _shaderAsset = 'packages/great_wall_ux/shaders/fractal.frag';
 /// Flutter's gesture arena. Tap dispatches a select-mode event. Scroll zooms;
 /// `L` + scroll adjusts brightness (a tacit, never-displayed control).
 ///
+/// Keyboard shortcuts are intentionally *not* handled here: a consuming app
+/// owns keyboard focus and routes shortcuts itself (the wallet app binds
+/// `V` + Up/Down to [SoundBoard] volume, for instance). The library's job is
+/// to render and to expose the controllers the host drives.
+///
 /// Accessibility: the canvas is a single opaque interactive node with no
 /// inner content description, deliberately.
 class FractalCanvas extends StatefulWidget {
