@@ -7,6 +7,7 @@
 // V+Up/Down sound-cue volume (level 0 == muted).
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:great_wall_ux/great_wall_ux.dart';
 
 void main() => runApp(const _App());
@@ -59,76 +60,100 @@ class _HomeState extends State<_Home> {
     super.dispose();
   }
 
+  // Hold V and tap Up/Down to step the sound-cue volume. A consuming app owns
+  // keyboard focus, so the hotkey is wired here (not inside the library widget);
+  // the wallet app does the same in its own key handler.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final bool vHeld =
+        HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.keyV);
+    if (!vHeld) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      setState(() => _volume = _sounds.volumeUp());
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      setState(() => _volume = _sounds.volumeDown());
+    } else {
+      return KeyEventResult.ignored;
+    }
+    _sounds.play(UiSound.click); // confirm the new level audibly
+    return KeyEventResult.handled;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Great Wall — fractal canvas')),
-      body: Row(
-        children: <Widget>[
-          Expanded(
-            child: FractalCanvas(
-              source: _source,
-              controller: _controller,
-              palette: Palette.forHue(_hue),
-              brightness: _brightness,
-              stage: Stage.stage1,
-              semanticLabel: 'Fractal canvas',
-              sounds: _sounds,
-              onVolumeChanged: (int level) => setState(() => _volume = level),
-              onSelect: (FractalSelection _) {
-                // The canvas already played the click cue; the app plays the
-                // outcome cue once it knows the decode result. The demo
-                // source has no decode, so we treat every tap as a commit.
-                _sounds.play(UiSound.select);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Point selected')),
-                );
-              },
-            ),
-          ),
-          SizedBox(
-            width: 180,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  HueWheel(
-                    value: _hue,
-                    onChanged: (HueOffset h) => setState(() => _hue = h),
-                  ),
-                  const SizedBox(height: 24),
-                  StageCountSlider(
-                    value: _stages,
-                    onChanged: (int n) => setState(() => _stages = n),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Hold L and scroll to adjust brightness.\n'
-                    'Hold V and press Up/Down to change volume.',
-                    textAlign: TextAlign.center,
-                  ),
-                  TextButton(
-                    onPressed: _brightness.reset,
-                    child: const Text('Reset brightness'),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => setState(() {
-                      _sounds.toggleMute();
-                      _volume = _sounds.volumeLevel;
-                    }),
-                    icon: Icon(
-                      _volume == 0 ? Icons.volume_off : Icons.volume_up,
-                    ),
-                    label: Text(
-                      _volume == 0 ? 'Muted' : 'Volume $_volume/$kMaxVolumeLevel',
-                    ),
-                  ),
-                ],
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Great Wall — fractal canvas')),
+        body: Row(
+          children: <Widget>[
+            Expanded(
+              child: FractalCanvas(
+                source: _source,
+                controller: _controller,
+                palette: Palette.forHue(_hue),
+                brightness: _brightness,
+                stage: Stage.stage1,
+                semanticLabel: 'Fractal canvas',
+                sounds: _sounds,
+                onSelect: (FractalSelection _) {
+                  // The canvas already played the click cue; the app plays the
+                  // outcome cue once it knows the decode result. The demo
+                  // source has no decode, so we treat every tap as a commit.
+                  _sounds.play(UiSound.select);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Point selected')),
+                  );
+                },
               ),
             ),
-          ),
-        ],
+            SizedBox(
+              width: 180,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    HueWheel(
+                      value: _hue,
+                      onChanged: (HueOffset h) => setState(() => _hue = h),
+                    ),
+                    const SizedBox(height: 24),
+                    StageCountSlider(
+                      value: _stages,
+                      onChanged: (int n) => setState(() => _stages = n),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Hold L and scroll to adjust brightness.\n'
+                      'Hold V and press Up/Down to change volume.',
+                      textAlign: TextAlign.center,
+                    ),
+                    TextButton(
+                      onPressed: _brightness.reset,
+                      child: const Text('Reset brightness'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => setState(() {
+                        _sounds.toggleMute();
+                        _volume = _sounds.volumeLevel;
+                      }),
+                      icon: Icon(
+                        _volume == 0 ? Icons.volume_off : Icons.volume_up,
+                      ),
+                      label: Text(
+                        _volume == 0
+                            ? 'Muted'
+                            : 'Volume $_volume/$kMaxVolumeLevel',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

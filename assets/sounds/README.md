@@ -13,7 +13,8 @@ Short UI sound cues for the "sober, but game-like" interaction surface
 
 Played through the `SoundBoard` controller. Volume is a discrete level from
 `0` to `kMaxVolumeLevel` (11 settings); **level `0` is silent and is exactly
-what "muted" means** — there is no separate mute flag. The canvas exposes
-`V` + Up/Down as a live volume hotkey (mirroring `L` + scroll for brightness),
-and each step plays a cue at the new level as feedback. These are display-only
-feedback and are never logged.
+what "muted" means** — there is no separate mute flag. The board exposes
+`volumeUp` / `volumeDown` / `setVolumeLevel`; a consuming app binds the hotkey
+(the wallet app uses `V` + Up/Down, mirroring `L` + scroll for brightness) and
+plays a cue at the new level as feedback. These are display-only feedback and
+are never logged.

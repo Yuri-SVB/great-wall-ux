@@ -34,12 +34,10 @@ const String _shaderAsset = 'packages/great_wall_ux/shaders/fractal.frag';
 /// Flutter's gesture arena. Tap dispatches a select-mode event. Scroll zooms;
 /// `L` + scroll adjusts brightness (a tacit, never-displayed control).
 ///
-/// Keyboard: holding `V` and tapping the Up/Down arrows raises/lowers the UI
-/// sound-cue volume (see [SoundBoard]); the canvas takes focus on pointer-down
-/// so the hotkey is live once the user is interacting with it. Each step plays
-/// a cue at the new level as feedback — silence at level 0 *is* the "muted now"
-/// signal. The new level is reported through [onVolumeChanged] for any host
-/// that wants to show a readout.
+/// Keyboard shortcuts are intentionally *not* handled here: a consuming app
+/// owns keyboard focus and routes shortcuts itself (the wallet app binds
+/// `V` + Up/Down to [SoundBoard] volume, for instance). The library's job is
+/// to render and to expose the controllers the host drives.
 ///
 /// Accessibility: the canvas is a single opaque interactive node with no
 /// inner content description, deliberately.
@@ -56,7 +54,6 @@ class FractalCanvas extends StatefulWidget {
     this.overlays = CanvasOverlays.empty,
     this.onSelect,
     this.sounds,
-    this.onVolumeChanged,
     this.debugBisectionOverlay = false,
     this.semanticLabel,
     this.backPressure = const BackPressureConfig(),
@@ -84,12 +81,6 @@ class FractalCanvas extends StatefulWidget {
   /// cues (select/confirm/deny) are dispatched by the consuming app from its
   /// [onSelect] handler, where the decode result is known.
   final SoundBoard? sounds;
-
-  /// Called with the new volume level (0..[kMaxVolumeLevel]) whenever the
-  /// `V` + Up/Down hotkey changes it. Volume is not a tacit control, so a host
-  /// may freely surface this value (a readout, an icon). No-op if [sounds] is
-  /// null.
-  final ValueChanged<int>? onVolumeChanged;
 
   final bool debugBisectionOverlay;
   final String? semanticLabel;
@@ -123,11 +114,6 @@ class _FractalCanvasState extends State<FractalCanvas> {
   BrightnessController? _internalBrightness;
   BrightnessController get _brightness =>
       widget.brightness ?? (_internalBrightness ??= BrightnessController());
-
-  /// Focus for the `V` + Up/Down volume hotkey. Focus is requested on
-  /// pointer-down (see [build]) rather than auto-grabbed, so the canvas never
-  /// steals focus from a host's text fields until the user interacts with it.
-  final FocusNode _focusNode = FocusNode(debugLabel: 'FractalCanvas');
 
   @override
   void initState() {
@@ -166,7 +152,6 @@ class _FractalCanvasState extends State<FractalCanvas> {
     widget.controller.removeListener(_onViewportChanged);
     (widget.brightness ?? _internalBrightness)?.removeListener(_onUniformChanged);
     _internalBrightness?.dispose();
-    _focusNode.dispose();
     _refineTimer?.cancel();
     _shader?.dispose();
     _countsImage?.dispose();
@@ -286,65 +271,31 @@ class _FractalCanvasState extends State<FractalCanvas> {
           explicitChildNodes: false,
           enabled: widget.onSelect != null,
           excludeSemantics: true,
-          // Focus drives the `V` + Up/Down volume hotkey. Kept inside the
-          // excludeSemantics boundary so it does not add a focusable node to
-          // the canvas's deliberately-opaque accessibility surface.
-          child: Focus(
-            focusNode: _focusNode,
-            onKeyEvent: _handleKeyEvent,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapUp: widget.onSelect == null ? null : _handleTap,
-              onScaleStart: (_) {},
-              onScaleUpdate: _handleScale,
-              child: Listener(
-                onPointerDown: (_) => _focusNode.requestFocus(),
-                onPointerSignal: _handlePointerSignal,
-                child: CustomPaint(
-                  painter: FractalCanvasPainter(
-                    viewport: widget.controller.viewport,
-                    shader: _configuredShader(
-                      constraints.maxWidth,
-                      constraints.maxHeight,
-                    ),
-                    overlays: widget.overlays,
-                    debugBisectionOverlay: widget.debugBisectionOverlay,
-                    repaintTick: _repaintTick,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: widget.onSelect == null ? null : _handleTap,
+            onScaleStart: (_) {},
+            onScaleUpdate: _handleScale,
+            child: Listener(
+              onPointerSignal: _handlePointerSignal,
+              child: CustomPaint(
+                painter: FractalCanvasPainter(
+                  viewport: widget.controller.viewport,
+                  shader: _configuredShader(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
                   ),
-                  size: Size(constraints.maxWidth, constraints.maxHeight),
+                  overlays: widget.overlays,
+                  debugBisectionOverlay: widget.debugBisectionOverlay,
+                  repaintTick: _repaintTick,
                 ),
+                size: Size(constraints.maxWidth, constraints.maxHeight),
               ),
             ),
           ),
         );
       },
     );
-  }
-
-  /// Handle the `V` + Up/Down volume hotkey. Holding `V` and tapping an arrow
-  /// (or letting it auto-repeat) steps the [SoundBoard] volume; releasing keys
-  /// is ignored. Returns [KeyEventResult.handled] only when a step was taken,
-  /// so other shortcuts still see arrow keys when `V` is not held.
-  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    final SoundBoard? sounds = widget.sounds;
-    if (sounds == null || event is KeyUpEvent) return KeyEventResult.ignored;
-    final bool vHeld =
-        HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.keyV);
-    if (!vHeld) return KeyEventResult.ignored;
-
-    final int level;
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      level = sounds.volumeUp();
-    } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      level = sounds.volumeDown();
-    } else {
-      return KeyEventResult.ignored;
-    }
-    // Confirm the new level audibly (silent at 0 — that absence is the cue
-    // that the app is now muted).
-    sounds.play(UiSound.click);
-    widget.onVolumeChanged?.call(level);
-    return KeyEventResult.handled;
   }
 
   void _handleTap(TapUpDetails details) {
