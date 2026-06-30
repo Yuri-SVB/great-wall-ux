@@ -55,6 +55,36 @@ class CanvasIsland {
   final List<double> pointsReIm;
 }
 
+/// A selection frame: an axis-aligned white rectangle drawn *around* a region
+/// (a canonical island's bounding box, in fractal coordinates), padded outward
+/// by [paddingPx] screen pixels so the island sits comfortably inside it. Marks
+/// the region as "selected".
+@immutable
+class SelectionFrame {
+  const SelectionFrame({
+    required this.reMin,
+    required this.reMax,
+    required this.imMin,
+    required this.imMax,
+    this.paddingPx = 10.0,
+    this.thicknessPx = 2.0,
+    this.colour = const Color(0xFFFFFFFF),
+  });
+
+  /// Bounding box of the framed region, in fractal coordinates.
+  final double reMin;
+  final double reMax;
+  final double imMin;
+  final double imMax;
+
+  /// Outward padding from the box to the frame, in screen pixels.
+  final double paddingPx;
+
+  /// Stroke width of the frame, in screen pixels.
+  final double thicknessPx;
+  final Color colour;
+}
+
 /// All overlays paintable on the canvas for one frame.
 @immutable
 class CanvasOverlays {
@@ -63,6 +93,7 @@ class CanvasOverlays {
     this.crosshairs = false,
     this.bisectionRects = const <BisectionRect>[],
     this.islands = const <CanvasIsland>[],
+    this.frames = const <SelectionFrame>[],
   });
 
   final List<PointMarker> points;
@@ -76,6 +107,9 @@ class CanvasOverlays {
   /// Canonical islands to highlight (flat white). Empty unless the host has
   /// enumerated them (e.g. the Setup screen's `E` action).
   final List<CanvasIsland> islands;
+
+  /// Selection frames drawn around chosen islands.
+  final List<SelectionFrame> frames;
 
   static const CanvasOverlays empty = CanvasOverlays();
 }

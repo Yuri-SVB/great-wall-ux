@@ -81,6 +81,23 @@ class FractalCanvasPainter extends CustomPainter {
       }
     }
 
+    // Selection frames: white rectangles around chosen islands (over the cells).
+    for (final SelectionFrame f in overlays.frames) {
+      final (double x0, double y0) = math.coordToPixel(f.reMin, f.imMin);
+      final (double x1, double y1) = math.coordToPixel(f.reMax, f.imMax);
+      final double left = (x0 < x1 ? x0 : x1) - f.paddingPx;
+      final double right = (x0 > x1 ? x0 : x1) + f.paddingPx;
+      final double top = (y0 < y1 ? y0 : y1) - f.paddingPx;
+      final double bottom = (y0 > y1 ? y0 : y1) + f.paddingPx;
+      canvas.drawRect(
+        Rect.fromLTRB(left, top, right, bottom),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = f.thicknessPx
+          ..color = f.colour,
+      );
+    }
+
     if (debugBisectionOverlay) {
       final Paint stroke = Paint()
         ..style = PaintingStyle.stroke
