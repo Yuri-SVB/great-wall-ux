@@ -55,6 +55,29 @@ class CanvasIsland {
   final List<double> pointsReIm;
 }
 
+/// A fixed-size cross marker at a fractal coordinate. Unlike island cells (which
+/// scale with zoom), the cross stays the same pixel size at every zoom, so it
+/// always marks the spot; zoom in far enough and the island it sits on grows
+/// into view around it.
+@immutable
+class CrossMarker {
+  const CrossMarker({
+    required this.re,
+    required this.im,
+    this.sizePx = 14.0,
+    this.thicknessPx = 2.0,
+    this.colour = const Color(0xFFFFFFFF),
+  });
+
+  final double re;
+  final double im;
+
+  /// Full arm-to-arm length of the cross, in screen pixels.
+  final double sizePx;
+  final double thicknessPx;
+  final Color colour;
+}
+
 /// A selection frame: an axis-aligned white rectangle drawn *around* a region
 /// (a canonical island's bounding box, in fractal coordinates), padded outward
 /// by [paddingPx] screen pixels so the island sits comfortably inside it. Marks
@@ -94,6 +117,7 @@ class CanvasOverlays {
     this.bisectionRects = const <BisectionRect>[],
     this.islands = const <CanvasIsland>[],
     this.frames = const <SelectionFrame>[],
+    this.crosses = const <CrossMarker>[],
   });
 
   final List<PointMarker> points;
@@ -110,6 +134,9 @@ class CanvasOverlays {
 
   /// Selection frames drawn around chosen islands.
   final List<SelectionFrame> frames;
+
+  /// Fixed-size cross markers (e.g. the generated point's canonical island).
+  final List<CrossMarker> crosses;
 
   static const CanvasOverlays empty = CanvasOverlays();
 }

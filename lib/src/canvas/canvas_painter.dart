@@ -124,6 +124,17 @@ class FractalCanvasPainter extends CustomPainter {
       final (double px, double py) = math.coordToPixel(m.re, m.im);
       canvas.drawCircle(Offset(px, py), m.radiusPx, Paint()..color = m.colour);
     }
+
+    // Fixed-size crosses (drawn last, on top of everything).
+    for (final CrossMarker c in overlays.crosses) {
+      final (double px, double py) = math.coordToPixel(c.re, c.im);
+      final double h = c.sizePx / 2.0;
+      final Paint stroke = Paint()
+        ..color = c.colour
+        ..strokeWidth = c.thicknessPx;
+      canvas.drawLine(Offset(px - h, py), Offset(px + h, py), stroke);
+      canvas.drawLine(Offset(px, py - h), Offset(px, py + h), stroke);
+    }
   }
 
   @override
