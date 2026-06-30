@@ -60,6 +60,27 @@ class FractalCanvasPainter extends CustomPainter {
 
     final ViewportMath math = ViewportMath(viewport);
 
+    // Canonical-island highlights: flat white cells, drawn under the markers.
+    if (overlays.islands.isNotEmpty) {
+      final double u = math.unitsPerPixel;
+      // Disable anti-aliasing and overlap cells by a hairline so adjacent
+      // cells fuse into a seamless solid shape rather than showing grid gaps.
+      final Paint fill = Paint()
+        ..color = const Color(0xFFFFFFFF)
+        ..isAntiAlias = false;
+      for (final CanvasIsland island in overlays.islands) {
+        final double sidePx = island.cellSize / u + 1.0;
+        final List<double> pts = island.pointsReIm;
+        for (int i = 0; i + 1 < pts.length; i += 2) {
+          final (double cx, double cy) = math.coordToPixel(pts[i], pts[i + 1]);
+          canvas.drawRect(
+            Rect.fromCenter(center: Offset(cx, cy), width: sidePx, height: sidePx),
+            fill,
+          );
+        }
+      }
+    }
+
     if (debugBisectionOverlay) {
       final Paint stroke = Paint()
         ..style = PaintingStyle.stroke

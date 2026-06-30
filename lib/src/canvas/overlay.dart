@@ -37,6 +37,24 @@ class BisectionRect {
   final double imMax;
 }
 
+/// A canonical island to highlight, as a set of equal-sized square cells.
+///
+/// Each entry of [pointsReIm] is a cell *centre* in fractal coordinates, stored
+/// interleaved as `[re0, im0, re1, im1, ...]` (compact for the thousands of
+/// cells a single island can have). Every cell is [cellSize] fractal units on a
+/// side ([the island's `pixel_delta`]); the union of the cells is the island's
+/// shape. The painter fills them flat white.
+@immutable
+class CanvasIsland {
+  const CanvasIsland({required this.cellSize, required this.pointsReIm});
+
+  /// Cell side length, in fractal units.
+  final double cellSize;
+
+  /// Interleaved `[re, im]` cell centres in fractal coordinates.
+  final List<double> pointsReIm;
+}
+
 /// All overlays paintable on the canvas for one frame.
 @immutable
 class CanvasOverlays {
@@ -44,6 +62,7 @@ class CanvasOverlays {
     this.points = const <PointMarker>[],
     this.crosshairs = false,
     this.bisectionRects = const <BisectionRect>[],
+    this.islands = const <CanvasIsland>[],
   });
 
   final List<PointMarker> points;
@@ -53,6 +72,10 @@ class CanvasOverlays {
   /// Outside debug mode they are silently dropped — the gating is enforced
   /// at the painter, not the caller.
   final List<BisectionRect> bisectionRects;
+
+  /// Canonical islands to highlight (flat white). Empty unless the host has
+  /// enumerated them (e.g. the Setup screen's `E` action).
+  final List<CanvasIsland> islands;
 
   static const CanvasOverlays empty = CanvasOverlays();
 }
