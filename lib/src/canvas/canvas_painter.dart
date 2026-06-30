@@ -60,6 +60,44 @@ class FractalCanvasPainter extends CustomPainter {
 
     final ViewportMath math = ViewportMath(viewport);
 
+    // Canonical-island highlights: flat white cells, drawn under the markers.
+    if (overlays.islands.isNotEmpty) {
+      final double u = math.unitsPerPixel;
+      // Disable anti-aliasing and overlap cells by a hairline so adjacent
+      // cells fuse into a seamless solid shape rather than showing grid gaps.
+      final Paint fill = Paint()
+        ..color = const Color(0xFFFFFFFF)
+        ..isAntiAlias = false;
+      for (final CanvasIsland island in overlays.islands) {
+        final double sidePx = island.cellSize / u + 1.0;
+        final List<double> pts = island.pointsReIm;
+        for (int i = 0; i + 1 < pts.length; i += 2) {
+          final (double cx, double cy) = math.coordToPixel(pts[i], pts[i + 1]);
+          canvas.drawRect(
+            Rect.fromCenter(center: Offset(cx, cy), width: sidePx, height: sidePx),
+            fill,
+          );
+        }
+      }
+    }
+
+    // Selection frames: white rectangles around chosen islands (over the cells).
+    for (final SelectionFrame f in overlays.frames) {
+      final (double x0, double y0) = math.coordToPixel(f.reMin, f.imMin);
+      final (double x1, double y1) = math.coordToPixel(f.reMax, f.imMax);
+      final double left = (x0 < x1 ? x0 : x1) - f.paddingPx;
+      final double right = (x0 > x1 ? x0 : x1) + f.paddingPx;
+      final double top = (y0 < y1 ? y0 : y1) - f.paddingPx;
+      final double bottom = (y0 > y1 ? y0 : y1) + f.paddingPx;
+      canvas.drawRect(
+        Rect.fromLTRB(left, top, right, bottom),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = f.thicknessPx
+          ..color = f.colour,
+      );
+    }
+
     if (debugBisectionOverlay) {
       final Paint stroke = Paint()
         ..style = PaintingStyle.stroke
@@ -85,6 +123,17 @@ class FractalCanvasPainter extends CustomPainter {
     for (final PointMarker m in overlays.points) {
       final (double px, double py) = math.coordToPixel(m.re, m.im);
       canvas.drawCircle(Offset(px, py), m.radiusPx, Paint()..color = m.colour);
+    }
+
+    // Fixed-size crosses (drawn last, on top of everything).
+    for (final CrossMarker c in overlays.crosses) {
+      final (double px, double py) = math.coordToPixel(c.re, c.im);
+      final double h = c.sizePx / 2.0;
+      final Paint stroke = Paint()
+        ..color = c.colour
+        ..strokeWidth = c.thicknessPx;
+      canvas.drawLine(Offset(px - h, py), Offset(px + h, py), stroke);
+      canvas.drawLine(Offset(px, py - h), Offset(px, py + h), stroke);
     }
   }
 
