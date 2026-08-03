@@ -1,5 +1,13 @@
 import 'viewport.dart';
 
+/// The half-extent at which the shader's reported `zoom` equals 1. Matches the
+/// default initial viewport half-extent, so `zoom == 1` at the starting view and
+/// grows as the user zooms in (smaller half-extent); the inherited brightness
+/// curve uses this to brighten on zoom. Lives here (the viewport↔zoom seam) so
+/// consumers can reproduce `zoom = kReferenceHalfExtent / halfExtent` without
+/// reaching into the painter.
+const double kReferenceHalfExtent = 2.0;
+
 /// Deterministic pixel ↔ fractal-coordinate mapping for a [FractalViewport].
 ///
 /// This is the single point at which logical pixels and fractal coordinates

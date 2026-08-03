@@ -9,13 +9,6 @@ import 'overlay.dart';
 import 'viewport.dart';
 import 'viewport_math.dart';
 
-/// Reference half-extent used to derive the brightness `zoom` scalar.
-///
-/// Matches the default initial viewport half-extent, so `zoom == 1` at the
-/// starting view and grows as the user zooms in (smaller half-extent). The
-/// inherited brightness curve uses this to brighten on zoom.
-const double kReferenceHalfExtent = 2.0;
-
 /// Paints the fractal via a configured [ui.FragmentShader] and composites
 /// overlays on top.
 ///
