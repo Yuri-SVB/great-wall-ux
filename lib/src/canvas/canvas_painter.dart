@@ -21,6 +21,8 @@ class FractalCanvasPainter extends CustomPainter {
     required this.viewport,
     required this.shader,
     required this.overlays,
+    required this.islandMask,
+    required this.islandCells,
     required this.debugBisectionOverlay,
     required this.repaintTick,
   });
@@ -32,6 +34,17 @@ class FractalCanvasPainter extends CustomPainter {
   final ui.FragmentShader? shader;
 
   final CanvasOverlays overlays;
+
+  /// Canonical islands resolved at the current render resolution: a white
+  /// coverage mask, parallel to the escape-count raster, stretched over the
+  /// canvas. Null when no island resolved (or none is shown). See
+  /// `island_fill.dart` for why islands are filled rather than drawn as cells.
+  final ui.Image? islandMask;
+
+  /// Islands the fill could not resolve on the current raster, drawn as
+  /// discovery cells so an island is never silently dropped. Normally empty.
+  final List<CanvasIsland> islandCells;
+
   final bool debugBisectionOverlay;
 
   /// Monotonic counter bumped whenever uniforms change (viewport, brightness,
@@ -53,15 +66,32 @@ class FractalCanvasPainter extends CustomPainter {
 
     final ViewportMath math = ViewportMath(viewport);
 
-    // Canonical-island highlights: flat white cells, drawn under the markers.
-    if (overlays.islands.isNotEmpty) {
+    // Canonical-island highlights, drawn under the markers.
+    //
+    // The mask is filled at the raster's resolution, which is the canvas
+    // resolution once the refine pass lands (and half of it during the
+    // low-res pass), so it covers exactly the same fractal extent. Nearest
+    // sampling keeps the island's edge on the same pixel boundaries as the
+    // fractal beneath it rather than blurring across them.
+    final ui.Image? mask = islandMask;
+    if (mask != null) {
+      canvas.drawImageRect(
+        mask,
+        Rect.fromLTWH(0, 0, mask.width.toDouble(), mask.height.toDouble()),
+        Offset.zero & size,
+        Paint()..filterQuality = FilterQuality.none,
+      );
+    }
+
+    // Fallback for islands the fill could not resolve: flat white cells.
+    if (islandCells.isNotEmpty) {
       final double u = math.unitsPerPixel;
       // Disable anti-aliasing and overlap cells by a hairline so adjacent
       // cells fuse into a seamless solid shape rather than showing grid gaps.
       final Paint fill = Paint()
         ..color = const Color(0xFFFFFFFF)
         ..isAntiAlias = false;
-      for (final CanvasIsland island in overlays.islands) {
+      for (final CanvasIsland island in islandCells) {
         final double sidePx = island.cellSize / u + 1.0;
         final List<double> pts = island.pointsReIm;
         for (int i = 0; i + 1 < pts.length; i += 2) {
@@ -136,6 +166,8 @@ class FractalCanvasPainter extends CustomPainter {
         old.viewport != viewport ||
         !identical(old.shader, shader) ||
         !identical(old.overlays, overlays) ||
+        !identical(old.islandMask, islandMask) ||
+        !identical(old.islandCells, islandCells) ||
         old.debugBisectionOverlay != debugBisectionOverlay;
   }
 }
@@ -158,6 +190,39 @@ Future<ui.Image> packEscapeCounts({
     final int o = i * 4;
     rgba[o] = v;
     rgba[o + 3] = 255;
+  }
+  final Completer<ui.Image> completer = Completer<ui.Image>();
+  ui.decodeImageFromPixels(
+    rgba,
+    widthPx,
+    heightPx,
+    ui.PixelFormat.rgba8888,
+    completer.complete,
+  );
+  return completer.future;
+}
+
+/// Pack an island coverage mask into a white [ui.Image] the painter can blit.
+///
+/// The mask is the flood-fill result from `island_fill.dart`: one byte per
+/// raster pixel, non-zero where an island covers it. It becomes the image's
+/// alpha, so a covered pixel is opaque white and everything else is fully
+/// transparent — one `drawImageRect` instead of a rect per cell, which matters
+/// when a deep-zoom island covers a large part of the view.
+Future<ui.Image> packIslandMask({
+  required int widthPx,
+  required int heightPx,
+  required Uint8List mask,
+}) {
+  final Uint8List rgba = Uint8List(widthPx * heightPx * 4);
+  for (int i = 0; i < mask.length; i++) {
+    final int a = mask[i];
+    if (a == 0) continue;
+    final int o = i * 4;
+    rgba[o] = 255;
+    rgba[o + 1] = 255;
+    rgba[o + 2] = 255;
+    rgba[o + 3] = a;
   }
   final Completer<ui.Image> completer = Completer<ui.Image>();
   ui.decodeImageFromPixels(

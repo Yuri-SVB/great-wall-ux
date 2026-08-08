@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,7 @@ import '../render/brightness_controller.dart';
 import '../stages/stage.dart';
 import 'canvas_painter.dart';
 import 'escape_count_source.dart';
+import 'island_fill.dart';
 import 'overlay.dart';
 import 'viewport.dart';
 import 'viewport_math.dart';
@@ -111,6 +113,17 @@ class _FractalCanvasState extends State<FractalCanvas> {
   int _requestSeq = 0;
   int _repaintTick = 0;
 
+  /// The raster behind [_countsImage], kept so canonical islands can be flood
+  /// filled over the exact escape counts being drawn (see `island_fill.dart`),
+  /// together with the viewport it was rendered for — which is the reduced-size
+  /// one during the low-res pass, and fixes where the island's seeds land.
+  EscapeCountRaster? _raster;
+  FractalViewport? _rasterViewport;
+
+  ui.Image? _islandMask;
+  List<CanvasIsland> _islandCells = const <CanvasIsland>[];
+  int _maskSeq = 0;
+
   BrightnessController? _internalBrightness;
   BrightnessController get _brightness =>
       widget.brightness ?? (_internalBrightness ??= BrightnessController());
@@ -145,6 +158,13 @@ class _FractalCanvasState extends State<FractalCanvas> {
         old.maxIterations != widget.maxIterations) {
       _scheduleRender(immediate: true);
     }
+    // A new island set (the host's `E` reveal, a fresh selection) re-floods
+    // against the raster already in hand — no re-render needed. Compared by
+    // element, not by list identity: a host that rebuilds its overlay list each
+    // frame while holding the same islands must not re-fill on every rebuild.
+    if (!listEquals(old.overlays.islands, widget.overlays.islands)) {
+      _rebuildIslandMask();
+    }
   }
 
   @override
@@ -156,6 +176,7 @@ class _FractalCanvasState extends State<FractalCanvas> {
     _shader?.dispose();
     _countsImage?.dispose();
     _paletteImage?.dispose();
+    _islandMask?.dispose();
     super.dispose();
   }
 
@@ -225,6 +246,59 @@ class _FractalCanvasState extends State<FractalCanvas> {
     setState(() {
       _countsImage?.dispose();
       _countsImage = image;
+      _raster = r;
+      _rasterViewport = vp;
+      _repaintTick++;
+    });
+    // Islands are re-filled per raster, so the highlight always matches the
+    // fractal on screen: low-res during interaction, crisp after the refine.
+    unawaited(_rebuildIslandMask());
+  }
+
+  /// Re-derive the canonical-island highlight from the current raster.
+  ///
+  /// The fill is synchronous and bounded by the raster (4-connected, marks on
+  /// push); only the upload to a [ui.Image] is async, so a stale pass is
+  /// dropped on [_maskSeq] rather than clobbering a newer one.
+  Future<void> _rebuildIslandMask() async {
+    final EscapeCountRaster? r = _raster;
+    final FractalViewport? vp = _rasterViewport;
+    final List<CanvasIsland> islands = widget.overlays.islands;
+    final int seq = ++_maskSeq;
+
+    if (r == null || vp == null || islands.isEmpty) {
+      if (_islandMask == null && _islandCells.isEmpty) return;
+      setState(() {
+        _islandMask?.dispose();
+        _islandMask = null;
+        _islandCells = const <CanvasIsland>[];
+        _repaintTick++;
+      });
+      return;
+    }
+
+    final IslandFillResult fill = fillIslands(
+      raster: r,
+      rasterViewport: vp,
+      islands: islands,
+    );
+
+    ui.Image? image;
+    if (!fill.isEmpty) {
+      image = await packIslandMask(
+        widthPx: fill.widthPx,
+        heightPx: fill.heightPx,
+        mask: fill.mask,
+      );
+    }
+    if (!mounted || seq != _maskSeq) {
+      image?.dispose();
+      return;
+    }
+    setState(() {
+      _islandMask?.dispose();
+      _islandMask = image;
+      _islandCells = fill.unfilled;
       _repaintTick++;
     });
   }
@@ -286,6 +360,8 @@ class _FractalCanvasState extends State<FractalCanvas> {
                     constraints.maxHeight,
                   ),
                   overlays: widget.overlays,
+                  islandMask: _islandMask,
+                  islandCells: _islandCells,
                   debugBisectionOverlay: widget.debugBisectionOverlay,
                   repaintTick: _repaintTick,
                 ),

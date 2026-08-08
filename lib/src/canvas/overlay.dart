@@ -37,22 +37,65 @@ class BisectionRect {
   final double imMax;
 }
 
-/// A canonical island to highlight, as a set of equal-sized square cells.
+/// A canonical island to highlight, painted flat white.
 ///
-/// Each entry of [pointsReIm] is a cell *centre* in fractal coordinates, stored
-/// interleaved as `[re0, im0, re1, im1, ...]` (compact for the thousands of
-/// cells a single island can have). Every cell is [cellSize] fractal units on a
-/// side ([the island's `pixel_delta`]); the union of the cells is the island's
-/// shape. The painter fills them flat white.
+/// Each entry of [pointsReIm] is a point of the island in fractal coordinates,
+/// stored interleaved as `[re0, im0, re1, im1, ...]` (compact for the thousands
+/// of points a single island can have). They are the cell centres the core's
+/// discovery flood fill visited, on a lattice of [cellSize] fractal units
+/// derived from the leaf rectangle (the island's `pixel_delta`).
+///
+/// The painter treats them as **seeds, not as the shape**. Escape count is a
+/// property of a point rather than of the lattice that sampled it, so each one
+/// stays a valid seed at any resolution; the canvas re-floods from them over the
+/// raster it is drawing and paints that union, which stays crisp at every zoom
+/// instead of fattening into `cellSize` blocks. [escapeCount] is the count that
+/// defines the island's level set and is what the fill matches on — without it
+/// the island can only be drawn as cells. See `island_fill.dart`.
+///
+/// The union of [cellSize] cells at [pointsReIm] remains the fallback shape, for
+/// when the fill cannot resolve the island on the raster at hand.
 @immutable
 class CanvasIsland {
-  const CanvasIsland({required this.cellSize, required this.pointsReIm});
+  const CanvasIsland({
+    required this.cellSize,
+    required this.pointsReIm,
+    this.escapeCount = unknownEscapeCount,
+  });
 
-  /// Cell side length, in fractal units.
+  /// Sentinel for "the host did not supply an escape count". Such an island is
+  /// never flood-filled; it falls back to its cells.
+  static const int unknownEscapeCount = -1;
+
+  /// Discovery lattice spacing, in fractal units — the fallback cell side.
   final double cellSize;
 
-  /// Interleaved `[re, im]` cell centres in fractal coordinates.
+  /// Interleaved `[re, im]` island points in fractal coordinates. Seeds for the
+  /// fill; cell centres for the fallback.
   final List<double> pointsReIm;
+
+  /// The escape count shared by every point of the island, or
+  /// [unknownEscapeCount].
+  final int escapeCount;
+
+  /// Value equality, so a canvas can tell "the same islands, rebuilt" from "new
+  /// islands" and re-run the flood fill only for the latter. [listEquals] is
+  /// identity-first, so the common case (a host rebuilding its overlay list
+  /// around the same island objects) costs a pointer comparison rather than a
+  /// walk over thousands of points.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CanvasIsland &&
+          other.cellSize == cellSize &&
+          other.escapeCount == escapeCount &&
+          listEquals(other.pointsReIm, pointsReIm);
+
+  /// Deliberately excludes the point values: they are the expensive part, and
+  /// hashing on the fields that are necessarily equal for equal islands keeps
+  /// this O(1).
+  @override
+  int get hashCode => Object.hash(cellSize, escapeCount, pointsReIm.length);
 }
 
 /// A fixed-size cross marker at a fractal coordinate. Unlike island cells (which
@@ -130,6 +173,11 @@ class CanvasOverlays {
 
   /// Canonical islands to highlight (flat white). Empty unless the host has
   /// enumerated them (e.g. the Setup screen's `E` action).
+  ///
+  /// The canvas re-derives each island's shape at the current render
+  /// resolution by flood filling from its points, so the host supplies the
+  /// island once and it stays crisp through pan and zoom without being
+  /// recomputed. See [CanvasIsland].
   final List<CanvasIsland> islands;
 
   /// Selection frames drawn around chosen islands.
