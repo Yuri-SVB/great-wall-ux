@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -8,9 +7,9 @@ import 'package:flutter/foundation.dart';
 /// The set is fixed by `great-wall-docs/great-wall-ux/TECH_STACK.md`
 /// §"Locked sub-decisions / Palette set": six hues evenly spaced around the
 /// wheel (60° apart), named by hue. Within any one scheme the hue is
-/// **constant** — only brightness varies — so the user reads detail by a
-/// single perceptual dimension rather than by an arbitrary, distracting hue
-/// ramp. The six-option set ossifies the palette surface: users switch by an
+/// **constant** — only brightness varies, and only through the shader's
+/// falloff — so the user reads detail by a single perceptual dimension rather
+/// than by an arbitrary, distracting hue ramp. The six-option set ossifies the palette surface: users switch by an
 /// explicit, labelled wheel action, never by cycle-on-keypress, and the
 /// variants are distinct enough that the user cannot drift between them by
 /// accident.
@@ -32,21 +31,17 @@ enum HueOffset {
 /// hue requested as the default in `great-wall-docs`.
 const HueOffset kDefaultHue = HueOffset.green;
 
-/// Brightness ramp shaping. A mild gamma lift keeps the low escape-count
-/// bands (the bulk of the structure hugging the set) from crushing to black,
-/// so brightness stays a legible signal across the whole range. The GPU
-/// brightness-falloff modulation (TECH_STACK.md §"Brightness modulation")
-/// then sculpts which band is most lit; the two compose.
-const double _defaultGamma = 0.85;
-
 /// Opaque black for the inside-the-set entry.
 const int _inside = 0x000000FF;
 
 /// Frozen escape-count → RGBA mapping for one hue.
 ///
-/// The palette surface is a **single hue at full saturation** whose
-/// **brightness ramps with the palette index** — i.e. with the (fixed-log)
-/// transformed escape count fed in by the shader. There is no user-extensible
+/// The palette surface is a **single hue at full saturation and full
+/// brightness** for every escaping count, and black inside the set. Brightness
+/// is the shader's falloff `1 / (1 + 2^((n − h) / s))` alone, which decreases
+/// strictly with the escape count `n`: a higher count is never brighter. (The
+/// palette used to ramp brightness *up* with the count as well; multiplied by
+/// the falloff, that made brightness rise and then fall with the count.) There is no user-extensible
 /// palette loader, no multi-hue base, and no toggle for the escape-count
 /// transform (the transform is fixed log; see
 /// `great-wall-docs/great-wall-ux/TECH_STACK.md`).
@@ -70,9 +65,8 @@ class Palette {
     required Uint32List rgba,
   }) : _rgba = rgba;
 
-  /// Build the palette for [hue]: a constant-hue, full-saturation ramp whose
-  /// brightness runs from black (lowest escape count) to the full-bright hue
-  /// (highest escaping count). The final entry — the inside-the-set colour —
+  /// Build the palette for [hue]: every escaping entry is the hue at full
+  /// saturation and brightness. The final entry — the inside-the-set colour —
   /// is opaque black and is never tinted.
   ///
   /// Caching policy: callers may keep the returned [Palette] around; the LUT
@@ -81,24 +75,17 @@ class Palette {
   factory Palette.forHue(
     HueOffset hue, {
     int tableSize = 256,
-    double gamma = _defaultGamma,
   }) {
     final Uint32List table = Uint32List(tableSize);
     final int last = tableSize - 1; // index reserved for inside-the-set
-    final double hueDeg = hue.degrees.toDouble();
-    for (int i = 0; i < last; i++) {
-      // t in [0, 1] across the escaping entries [0, last - 1].
-      final double t = last > 1 ? i / (last - 1) : 0.0;
-      final double value = math.pow(t, gamma).toDouble();
-      table[i] = _hsvToRgba(hueDeg, 1.0, value);
-    }
+    table.fillRange(0, last, _hsvToRgba(hue.degrees.toDouble(), 1.0, 1.0));
     table[last] = _inside;
     return Palette._(id: 'hue-${hue.name}', hueOffset: hue, rgba: table);
   }
 
   /// Deprecated alias for [Palette.forHue]. Kept so consumers written against
-  /// the previous multi-hue API keep compiling; they now receive the new
-  /// single-hue, brightness-ramped palette for [hue].
+  /// the previous multi-hue API keep compiling; they now receive the
+  /// single-hue palette for [hue].
   @Deprecated('Renamed to Palette.forHue; will be removed before 0.1.0.')
   factory Palette.classicWithHue(HueOffset hue) => Palette.forHue(hue);
 

@@ -46,8 +46,8 @@ void main() {
     });
 
     test('hue is constant within a scheme — green is pure green', () {
-      // Green (120°) at full saturation has zero red and blue across the
-      // whole escaping ramp; only the green channel (brightness) varies.
+      // Green (120°) at full saturation has zero red and blue across every
+      // escaping entry.
       final Palette p = Palette.forHue(HueOffset.green);
       for (int i = 0; i < p.size - 1; i++) {
         final int c = p.rgbaForIteration(i);
@@ -57,19 +57,18 @@ void main() {
       }
     });
 
-    test('brightness ramps monotonically with escape count', () {
-      // Green channel (the only lit channel for green) is non-decreasing
-      // across the escaping range: brightness carries the escape count.
-      final Palette p = Palette.forHue(HueOffset.green);
-      int prev = -1;
-      for (int i = 0; i < p.size - 1; i++) {
-        final int g = _g(p.rgbaForIteration(i));
-        expect(g, greaterThanOrEqualTo(prev));
-        prev = g;
+    test('every escaping entry is the full-bright hue (no ramp)', () {
+      // Brightness comes from the shader's falloff alone, which decreases with
+      // the escape count; a palette ramping up with the count would make the
+      // product rise and then fall.
+      for (final HueOffset h in HueOffset.values) {
+        final Palette p = Palette.forHue(h);
+        final int full = p.rgbaForIteration(0);
+        for (int i = 0; i < p.size - 1; i++) {
+          expect(p.rgbaForIteration(i), full, reason: '$h index $i');
+        }
       }
-      // Lowest escaping entry is black; brightest reaches full intensity.
-      expect(_g(p.rgbaForIteration(0)), 0);
-      expect(_g(p.rgbaForIteration(p.size - 2)), 255);
+      expect(_g(Palette.green.rgbaForIteration(0)), 255);
     });
 
     test('out-of-range iterations clamp', () {

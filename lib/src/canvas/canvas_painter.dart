@@ -172,25 +172,56 @@ class FractalCanvasPainter extends CustomPainter {
   }
 }
 
+/// Largest escape count the counts texture holds: 16 bits, the high byte in
+/// the red channel and the low byte in green.
+const int kMaxPackedEscapeCount = 0xFFFF;
+
+/// Bits per channel of the counts texture (`rgba8888`).
+const int _kChannelBits = 8;
+
+/// Mask of one channel's byte.
+const int _kChannelMask = 0xFF;
+
+/// The RGBA bytes [packEscapeCounts] uploads: each raw escape count, exact,
+/// split across red (high byte) and green (low byte); blue unused, alpha
+/// opaque. Counts above [kMaxPackedEscapeCount] are clamped.
+///
+/// Exact rather than normalised to `n / maxIterations` in one byte: at the
+/// deep-render cap of 1024 a single byte holds a step of four counts, which
+/// merges four shells into one shade and leaves the falloff's slope nothing
+/// to separate.
+Uint8List packEscapeCountBytes(Uint32List counts) {
+  final Uint8List rgba = Uint8List(counts.length * 4);
+  for (int i = 0; i < counts.length; i++) {
+    int n = counts[i];
+    if (n > kMaxPackedEscapeCount) n = kMaxPackedEscapeCount;
+    final int o = i * 4;
+    rgba[o] = n >> _kChannelBits;
+    rgba[o + 1] = n & _kChannelMask;
+    rgba[o + 3] = _kChannelMask;
+  }
+  return rgba;
+}
+
 /// Pack a raw escape-count raster into an [ui.Image] for the shader to
-/// sample. The count is stored normalised (`n / maxIterations`) in the red
-/// channel; the shader reconstructs `n = r * maxIter`. Stored at the
-/// raster's own resolution so a full-res frame maps 1:1 to fragments.
+/// sample ([packEscapeCountBytes]); the shader reconstructs
+/// `n = 255 · (256·r + g)`. Stored at the raster's own resolution so a
+/// full-res frame maps 1:1 to fragments.
+///
+/// The shader samples this image with nearest filtering, the
+/// `setImageSampler` default, which the byte split requires: interpolating
+/// the two bytes separately would not interpolate the count.
 Future<ui.Image> packEscapeCounts({
   required int widthPx,
   required int heightPx,
   required Uint32List counts,
   required int maxIterations,
 }) {
-  final Uint8List rgba = Uint8List(widthPx * heightPx * 4);
-  final double scale = maxIterations > 0 ? 255.0 / maxIterations : 0.0;
-  for (int i = 0; i < counts.length; i++) {
-    int v = (counts[i] * scale).round();
-    if (v > 255) v = 255;
-    final int o = i * 4;
-    rgba[o] = v;
-    rgba[o + 3] = 255;
-  }
+  assert(
+    maxIterations <= kMaxPackedEscapeCount,
+    'maxIterations $maxIterations exceeds the 16-bit counts texture',
+  );
+  final Uint8List rgba = packEscapeCountBytes(counts);
   final Completer<ui.Image> completer = Completer<ui.Image>();
   ui.decodeImageFromPixels(
     rgba,
