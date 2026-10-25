@@ -18,16 +18,21 @@ uniform float uFalloffBase;  // brightness falloff base B (= 16)
 uniform float uBeo;          // brightness exponent offset (live, tacit)
 uniform float uZoom;         // zoom factor (reference / halfExtent)
 uniform float uSlope;        // brightness falloff slope s (live, tacit; 1 = original)
-uniform sampler2D uCounts;   // escape counts, normalised n/maxIter in .r
+uniform sampler2D uCounts;   // exact escape counts: high byte in .r, low in .g
 uniform sampler2D uPalette;  // 256x1 RGBA palette LUT
 
 out vec4 fragColor;
 
 const float kPaletteSize = 256.0;
+const float kChannelMax = 255.0;   // a channel's largest byte
+const float kHighByteWeight = 256.0;
 
 void main() {
     vec2 uv = FlutterFragCoord().xy / uResolution;
-    float n = texture(uCounts, uv).r * uMaxIter;
+    // 16-bit count, sampled nearest (interpolating the bytes separately would
+    // not interpolate the count). Rounded: r and g are bytes / 255.
+    vec4 texel = texture(uCounts, uv);
+    float n = floor(kChannelMax * (kHighByteWeight * texel.r + texel.g) + 0.5);
 
     // Fixed log transform -> palette index. Inside-the-set points
     // (n == maxIter) take the last LUT entry; escaping points map
