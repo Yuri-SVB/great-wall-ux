@@ -1,9 +1,10 @@
 #version 460 core
 #include <flutter/runtime_effect.glsl>
 
-// Fractal colour pipeline: log transform -> palette lookup -> brightness
-// falloff, all on the GPU. The Rust core supplies only the raw escape-count
-// buffer (uploaded as uCounts); this shader turns counts into pixels.
+// Fractal colour pipeline: palette lookup (the hue, or black inside the set)
+// -> brightness falloff, all on the GPU. The Rust core supplies only the raw
+// escape-count buffer (uploaded as uCounts); this shader turns counts into
+// pixels.
 //
 // Locked by great-wall-docs/great-wall-ux/TECH_STACK.md
 // (Colour pipeline + Brightness modulation). Brightness offset (uBeo), slope
@@ -34,17 +35,11 @@ void main() {
     vec4 texel = texture(uCounts, uv);
     float n = floor(kChannelMax * (kHighByteWeight * texel.r + texel.g) + 0.5);
 
-    // Fixed log transform -> palette index. Inside-the-set points
-    // (n == maxIter) take the last LUT entry; escaping points map
-    // log2(1+n)/log2(1+maxIter) across [0, size-2].
-    float index;
-    if (n >= uMaxIter - 0.5) {
-        index = kPaletteSize - 1.0;
-    } else {
-        float denom = log2(1.0 + uMaxIter);
-        float t = denom > 0.0 ? log2(1.0 + n) / denom : 0.0;
-        index = floor(clamp(t, 0.0, 1.0) * (kPaletteSize - 2.0) + 0.5);
-    }
+    // Palette: inside-the-set points (n == maxIter) take the last LUT entry
+    // (black); every escaping point takes the hue at full brightness (entry 0;
+    // all escaping entries are equal). Brightness is the falloff's alone, so a
+    // higher count is never brighter.
+    float index = n >= uMaxIter - 0.5 ? kPaletteSize - 1.0 : 0.0;
     vec4 color = texture(uPalette, vec2((index + 0.5) / kPaletteSize, 0.5));
 
     // Sigmoid "cave-exploration" falloff inherited from great-wall-core,
