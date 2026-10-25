@@ -6,9 +6,9 @@
 // buffer (uploaded as uCounts); this shader turns counts into pixels.
 //
 // Locked by great-wall-docs/great-wall-ux/TECH_STACK.md
-// (Colour pipeline + Brightness modulation). Brightness offset (uBeo) and
-// the palette (uPalette) are uniforms, so live adjustment costs nothing per
-// frame and never re-runs escape_count.
+// (Colour pipeline + Brightness modulation). Brightness offset (uBeo), slope
+// (uSlope) and the palette (uPalette) are uniforms, so live adjustment costs
+// nothing per frame and never re-runs escape_count.
 
 precision highp float;
 
@@ -17,6 +17,7 @@ uniform float uMaxIter;      // iteration cap (matches the core request)
 uniform float uFalloffBase;  // brightness falloff base B (= 16)
 uniform float uBeo;          // brightness exponent offset (live, tacit)
 uniform float uZoom;         // zoom factor (reference / halfExtent)
+uniform float uSlope;        // brightness falloff slope s (live, tacit; 1 = original)
 uniform sampler2D uCounts;   // escape counts, normalised n/maxIter in .r
 uniform sampler2D uPalette;  // 256x1 RGBA palette LUT
 
@@ -41,9 +42,15 @@ void main() {
     }
     vec4 color = texture(uPalette, vec2((index + 0.5) / kPaletteSize, 0.5));
 
-    // Sigmoid "cave-exploration" falloff inherited from great-wall-core:
-    //   factor = B / (B + 2^(n - beo) / z^2)
-    float factor = uFalloffBase / (uFalloffBase + exp2(n - uBeo) / (uZoom * uZoom));
+    // Sigmoid "cave-exploration" falloff inherited from great-wall-core,
+    //   factor = B / (B + 2^(n - beo) / z^2) = 1 / (1 + 2^(n - h)),
+    // half brightness at h = beo + log2(B) + 2 log2(z), with a slope s:
+    //   factor = 1 / (1 + 2^((n - h) / s)).
+    // s = 1 is the original curve; a larger s spreads the falloff over more
+    // escape counts (more intermediate shades), a smaller one sharpens it.
+    // h does not depend on s, so the half-brightness point stays put.
+    float h = uBeo + log2(uFalloffBase) + 2.0 * log2(uZoom);
+    float factor = 1.0 / (1.0 + exp2((n - h) / uSlope));
     color.rgb *= factor;
 
     fragColor = color;

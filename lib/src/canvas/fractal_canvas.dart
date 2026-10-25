@@ -34,7 +34,8 @@ const String _shaderAsset = 'packages/great_wall_ux/shaders/fractal.frag';
 ///
 /// Gesture handling unifies pointer, touch, mouse, and trackpad through
 /// Flutter's gesture arena. Tap dispatches a select-mode event. Scroll zooms;
-/// `L` + scroll adjusts brightness (a tacit, never-displayed control).
+/// `L` + scroll adjusts the brightness offset and `G` + scroll its slope
+/// (tacit, never-displayed controls).
 ///
 /// Keyboard shortcuts are intentionally *not* handled here: a consuming app
 /// owns keyboard focus and routes shortcuts itself (the wallet app binds
@@ -317,6 +318,7 @@ class _FractalCanvasState extends State<FractalCanvas> {
     sh.setFloat(3, kBrightnessFalloffBase);
     sh.setFloat(4, _brightness.offset);
     sh.setFloat(5, zoom);
+    sh.setFloat(6, _brightness.slope);
     sh.setImageSampler(0, counts);
     sh.setImageSampler(1, palette);
     return sh;
@@ -402,11 +404,14 @@ class _FractalCanvasState extends State<FractalCanvas> {
 
   void _handlePointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) return;
-    final bool lHeld =
-        HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.keyL);
-    if (lHeld) {
+    final HardwareKeyboard kb = HardwareKeyboard.instance;
+    final double up = event.scrollDelta.dy < 0 ? 1.0 : -1.0;
+    if (kb.isLogicalKeyPressed(LogicalKeyboardKey.keyL)) {
       // Tacit brightness adjustment. Scroll up brightens the lit band.
-      _brightness.adjustBySteps(event.scrollDelta.dy < 0 ? 1.0 : -1.0);
+      _brightness.adjustBySteps(up);
+    } else if (kb.isLogicalKeyPressed(LogicalKeyboardKey.keyG)) {
+      // Tacit slope adjustment. Scroll up spreads the falloff (more shades).
+      _brightness.adjustSlopeBySteps(up);
     } else {
       final double factor = event.scrollDelta.dy < 0 ? 1.1 : 1 / 1.1;
       widget.controller.zoomBy(
