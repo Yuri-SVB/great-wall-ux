@@ -23,6 +23,7 @@ class FractalCanvasPainter extends CustomPainter {
     required this.overlays,
     required this.islandMask,
     required this.islandCells,
+    this.pathMask,
     required this.debugBisectionOverlay,
     required this.repaintTick,
   });
@@ -44,6 +45,11 @@ class FractalCanvasPainter extends CustomPainter {
   /// Islands the fill could not resolve on the current raster, drawn as
   /// discovery cells so an island is never silently dropped. Normally empty.
   final List<CanvasIsland> islandCells;
+
+  /// The landmark path's feature highlights at the current render resolution
+  /// (`path_fill.dart`), stretched over the canvas like [islandMask]. Null
+  /// when no path is shown.
+  final ui.Image? pathMask;
 
   final bool debugBisectionOverlay;
 
@@ -104,6 +110,9 @@ class FractalCanvasPainter extends CustomPainter {
       }
     }
 
+    final CanvasPath? path = overlays.path;
+    if (path != null) _paintPath(canvas, size, math, path);
+
     // Selection frames: white rectangles around chosen islands (over the cells).
     for (final SelectionFrame f in overlays.frames) {
       final (double x0, double y0) = math.coordToPixel(f.reMin, f.imMin);
@@ -160,6 +169,58 @@ class FractalCanvasPainter extends CustomPainter {
     }
   }
 
+  /// The landmark path: its highlights, then the line through its stops,
+  /// then the stops numbered from 1.
+  void _paintPath(Canvas canvas, Size size, ViewportMath math, CanvasPath path) {
+    final ui.Image? mask = pathMask;
+    if (mask != null) {
+      canvas.drawImageRect(
+        mask,
+        Rect.fromLTWH(0, 0, mask.width.toDouble(), mask.height.toDouble()),
+        Offset.zero & size,
+        Paint()
+          ..filterQuality = FilterQuality.none
+          ..colorFilter = ColorFilter.mode(
+            path.colour.withValues(alpha: path.highlightOpacity),
+            BlendMode.srcIn,
+          ),
+      );
+    }
+    final List<Offset> at = <Offset>[
+      for (final CanvasPathStop s in path.stops)
+        () {
+          final (double x, double y) = math.coordToPixel(s.re, s.im);
+          return Offset(x, y);
+        }(),
+    ];
+    if (at.length > 1) {
+      canvas.drawPath(
+        Path()..addPolygon(at, false),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = path.lineWidthPx
+          ..color = path.colour,
+      );
+    }
+    final Paint disc = Paint()..color = path.colour;
+    for (int k = 0; k < at.length; k++) {
+      canvas.drawCircle(at[k], path.stopRadiusPx, disc);
+      final TextPainter label = TextPainter(
+        text: TextSpan(
+          text: '${k + 1}',
+          style: TextStyle(
+            color: path.labelColour,
+            fontSize: path.labelSizePx,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      label.paint(canvas, at[k] - Offset(label.width / 2.0, label.height / 2.0));
+      label.dispose();
+    }
+  }
+
   @override
   bool shouldRepaint(covariant FractalCanvasPainter old) {
     return old.repaintTick != repaintTick ||
@@ -168,6 +229,7 @@ class FractalCanvasPainter extends CustomPainter {
         !identical(old.overlays, overlays) ||
         !identical(old.islandMask, islandMask) ||
         !identical(old.islandCells, islandCells) ||
+        !identical(old.pathMask, pathMask) ||
         old.debugBisectionOverlay != debugBisectionOverlay;
   }
 }

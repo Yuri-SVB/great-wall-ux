@@ -151,6 +151,108 @@ class SelectionFrame {
   final Color colour;
 }
 
+/// A set of cells on a regular grid in fractal coordinates: one byte per cell,
+/// non-zero for a cell of the set, row-major from the lowest imaginary part.
+@immutable
+class CanvasCells {
+  const CanvasCells({
+    required this.originRe,
+    required this.originIm,
+    required this.cellSize,
+    required this.width,
+    required this.height,
+    required this.cells,
+  });
+
+  /// Centre of cell `(0, 0)`, in fractal coordinates.
+  final double originRe;
+  final double originIm;
+
+  /// Cell side, in fractal units.
+  final double cellSize;
+  final int width;
+  final int height;
+
+  /// `width × height` bytes.
+  final Uint8List cells;
+
+  /// Whether the fractal point `(re, im)` lies in one of the cells.
+  bool contains(double re, double im) {
+    final int x = ((re - originRe) / cellSize + 0.5).floor();
+    final int y = ((im - originIm) / cellSize + 0.5).floor();
+    return x >= 0 && y >= 0 && x < width && y < height && cells[y * width + x] != 0;
+  }
+}
+
+/// One stop of a [CanvasPath]: its centre and the feature to highlight.
+///
+/// With a count range, the highlight is flood filled over the raster on screen
+/// from the feature's cells, through pixels whose escape count lies in
+/// `[countLow, countHigh]`, so it stays crisp at every zoom (an island with its
+/// shells). Without one, or where the fill cannot resolve it (the range
+/// reaches the render cap, or the feature is sub-pixel), the cells themselves
+/// are drawn (the outer shell, a fiord).
+@immutable
+class CanvasPathStop {
+  const CanvasPathStop({
+    required this.re,
+    required this.im,
+    required this.cells,
+    this.countLow,
+    this.countHigh,
+  });
+
+  /// The stop's centre (its feature's barycentre), in fractal coordinates.
+  final double re;
+  final double im;
+  final CanvasCells cells;
+  final int? countLow;
+  final int? countHigh;
+}
+
+/// Default stroke width of a path's line, in screen pixels.
+const double kPathLineWidthPx = 2.0;
+
+/// Default radius of a path's numbered stop markers, in screen pixels.
+const double kPathStopRadiusPx = 9.0;
+
+/// Default font size of a stop's number, in screen pixels.
+const double kPathLabelSizePx = 11.0;
+
+/// Default opacity of a path's feature highlights: translucent, so the
+/// fractal stays visible beneath them.
+const double kPathHighlightOpacity = 0.45;
+
+/// A landmark path: a line through its stops' centres, each stop numbered
+/// from 1, and each stop's feature highlighted.
+///
+/// Compared by identity: a host keeps one object per path, and the canvas
+/// re-fills the highlights only when it changes.
+@immutable
+class CanvasPath {
+  const CanvasPath({
+    required this.stops,
+    this.colour = const Color(0xFFFFFFFF),
+    this.labelColour = const Color(0xFF000000),
+    this.lineWidthPx = kPathLineWidthPx,
+    this.stopRadiusPx = kPathStopRadiusPx,
+    this.labelSizePx = kPathLabelSizePx,
+    this.highlightOpacity = kPathHighlightOpacity,
+  });
+
+  final List<CanvasPathStop> stops;
+
+  /// Colour of the line, the stop markers and the highlights.
+  final Color colour;
+
+  /// Colour of the stop numbers, on the markers.
+  final Color labelColour;
+  final double lineWidthPx;
+  final double stopRadiusPx;
+  final double labelSizePx;
+  final double highlightOpacity;
+}
+
 /// All overlays paintable on the canvas for one frame.
 @immutable
 class CanvasOverlays {
@@ -161,6 +263,7 @@ class CanvasOverlays {
     this.islands = const <CanvasIsland>[],
     this.frames = const <SelectionFrame>[],
     this.crosses = const <CrossMarker>[],
+    this.path,
   });
 
   final List<PointMarker> points;
@@ -185,6 +288,9 @@ class CanvasOverlays {
 
   /// Fixed-size cross markers (e.g. the generated point's canonical island).
   final List<CrossMarker> crosses;
+
+  /// A landmark path to draw, or null for none.
+  final CanvasPath? path;
 
   static const CanvasOverlays empty = CanvasOverlays();
 }

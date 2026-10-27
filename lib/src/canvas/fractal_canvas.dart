@@ -18,6 +18,7 @@ import '../stages/stage.dart';
 import 'canvas_painter.dart';
 import 'escape_count_source.dart';
 import 'island_fill.dart';
+import 'path_fill.dart';
 import 'overlay.dart';
 import 'viewport.dart';
 import 'viewport_math.dart';
@@ -141,6 +142,10 @@ class _FractalCanvasState extends State<FractalCanvas>
   List<CanvasIsland> _islandCells = const <CanvasIsland>[];
   int _maskSeq = 0;
 
+  /// The landmark path's highlights over [_raster] (`path_fill.dart`).
+  ui.Image? _pathMask;
+  int _pathSeq = 0;
+
   BrightnessController? _internalBrightness;
   BrightnessController get _brightness =>
       widget.brightness ?? (_internalBrightness ??= BrightnessController());
@@ -196,6 +201,9 @@ class _FractalCanvasState extends State<FractalCanvas>
     if (!listEquals(old.overlays.islands, widget.overlays.islands)) {
       _rebuildIslandMask();
     }
+    if (!identical(old.overlays.path, widget.overlays.path)) {
+      _rebuildPathMask();
+    }
   }
 
   @override
@@ -209,6 +217,7 @@ class _FractalCanvasState extends State<FractalCanvas>
     _countsImage?.dispose();
     _paletteImage?.dispose();
     _islandMask?.dispose();
+    _pathMask?.dispose();
     super.dispose();
   }
 
@@ -363,6 +372,7 @@ class _FractalCanvasState extends State<FractalCanvas>
     // Islands are re-filled per raster, so the highlight always matches the
     // fractal on screen: low-res during interaction, crisp after the refine.
     unawaited(_rebuildIslandMask());
+    unawaited(_rebuildPathMask());
   }
 
   /// Re-derive the canonical-island highlight from the current raster.
@@ -409,6 +419,41 @@ class _FractalCanvasState extends State<FractalCanvas>
       _islandMask?.dispose();
       _islandMask = image;
       _islandCells = fill.unfilled;
+      _repaintTick++;
+    });
+  }
+
+  /// Re-derive the landmark path's highlights from the current raster, as
+  /// [_rebuildIslandMask] does for islands.
+  Future<void> _rebuildPathMask() async {
+    final EscapeCountRaster? r = _raster;
+    final FractalViewport? vp = _rasterViewport;
+    final CanvasPath? path = widget.overlays.path;
+    final int seq = ++_pathSeq;
+
+    if (r == null || vp == null || path == null) {
+      if (_pathMask == null) return;
+      setState(() {
+        _pathMask?.dispose();
+        _pathMask = null;
+        _repaintTick++;
+      });
+      return;
+    }
+
+    final Uint8List mask = fillPath(raster: r, rasterViewport: vp, path: path);
+    final ui.Image image = await packIslandMask(
+      widthPx: r.widthPx,
+      heightPx: r.heightPx,
+      mask: mask,
+    );
+    if (!mounted || seq != _pathSeq) {
+      image.dispose();
+      return;
+    }
+    setState(() {
+      _pathMask?.dispose();
+      _pathMask = image;
       _repaintTick++;
     });
   }
@@ -473,6 +518,7 @@ class _FractalCanvasState extends State<FractalCanvas>
                   overlays: widget.overlays,
                   islandMask: _islandMask,
                   islandCells: _islandCells,
+                  pathMask: _pathMask,
                   debugBisectionOverlay: widget.debugBisectionOverlay,
                   repaintTick: _repaintTick,
                 ),
