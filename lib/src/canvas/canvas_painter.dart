@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../palette/palette.dart';
 import 'overlay.dart';
+import 'path_outline.dart';
 import 'viewport.dart';
 import 'viewport_math.dart';
 
@@ -104,6 +105,9 @@ class FractalCanvasPainter extends CustomPainter {
       }
     }
 
+    final CanvasPath? path = overlays.path;
+    if (path != null) _paintPath(canvas, size, math, path);
+
     // Selection frames: white rectangles around chosen islands (over the cells).
     for (final SelectionFrame f in overlays.frames) {
       final (double x0, double y0) = math.coordToPixel(f.reMin, f.imMin);
@@ -158,6 +162,94 @@ class FractalCanvasPainter extends CustomPainter {
       canvas.drawLine(Offset(px - h, py), Offset(px + h, py), stroke);
       canvas.drawLine(Offset(px, py - h), Offset(px, py + h), stroke);
     }
+  }
+
+  /// The landmark path: its highlights, then the line through its stops,
+  /// then the stops numbered from 1.
+  void _paintPath(Canvas canvas, Size size, ViewportMath math, CanvasPath path) {
+    _paintHighlights(canvas, size, math, path);
+    final List<Offset> at = <Offset>[
+      for (final CanvasPathStop s in path.stops)
+        () {
+          final (double x, double y) = math.coordToPixel(s.re, s.im);
+          return Offset(x, y);
+        }(),
+    ];
+    if (at.length > 1) {
+      canvas.drawPath(
+        Path()..addPolygon(at, false),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = path.lineWidthPx
+          ..color = path.colour,
+      );
+    }
+    final Paint disc = Paint()..color = path.colour;
+    for (int k = 0; k < at.length; k++) {
+      canvas.drawCircle(at[k], path.stopRadiusPx, disc);
+      final TextPainter label = TextPainter(
+        text: TextSpan(
+          text: '${k + 1}',
+          style: TextStyle(
+            color: path.labelColour,
+            fontSize: path.labelSizePx,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      label.paint(canvas, at[k] - Offset(label.width / 2.0, label.height / 2.0));
+      label.dispose();
+    }
+  }
+
+  /// Each stop's feature, filled from its outline ([outlineOf]): rounded once
+  /// a cell spans [kOutlineSmoothFromPx] pixels, its corner loops below that.
+  /// The stops share one translucent layer, so overlapping features read as
+  /// one highlight.
+  void _paintHighlights(
+    Canvas canvas,
+    Size size,
+    ViewportMath math,
+    CanvasPath path,
+  ) {
+    final Rect screen = Offset.zero & size;
+    final Paint opaque = Paint()..color = path.colour;
+    canvas.saveLayer(
+      screen,
+      Paint()..color = Color.fromRGBO(0, 0, 0, path.highlightOpacity),
+    );
+    for (final CanvasPathStop s in path.stops) {
+      final CanvasCells c = s.cells;
+      // The grid's corner (0, 0) on screen, and one cell along each axis.
+      final double half = c.cellSize / 2.0;
+      final (double x0, double y0) =
+          math.coordToPixel(c.originRe - half, c.originIm - half);
+      final (double x1, double y1) = math.coordToPixel(
+        c.originRe - half + c.cellSize,
+        c.originIm - half + c.cellSize,
+      );
+      final double ux = x1 - x0;
+      final double uy = y1 - y0;
+      final Rect box = Rect.fromPoints(
+        Offset(x0, y0),
+        Offset(x0 + ux * c.width, y0 + uy * c.height),
+      );
+      if (!box.overlaps(screen)) continue;
+      final CellOutline outline = outlineOf(c);
+      final List<Float64List> loops =
+          ux.abs() >= kOutlineSmoothFromPx ? outline.smooth : outline.loops;
+      final Path p = Path()..fillType = PathFillType.evenOdd;
+      for (final Float64List l in loops) {
+        p.moveTo(x0 + l[0] * ux, y0 + l[1] * uy);
+        for (int k = 2; k < l.length; k += 2) {
+          p.lineTo(x0 + l[k] * ux, y0 + l[k + 1] * uy);
+        }
+        p.close();
+      }
+      canvas.drawPath(p, opaque);
+    }
+    canvas.restore();
   }
 
   @override
