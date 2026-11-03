@@ -192,9 +192,11 @@ class SoundBoard {
   Map<String, String> _localFiles = const <String, String>{};
   final CueGate _gate = CueGate();
 
-  /// Players by source and loudness, with the loudness they play at.
-  final Map<String, ({AudioPlayer player, double loudness})> _players =
-      <String, ({AudioPlayer player, double loudness})>{};
+  /// Players by file and loudness, with the loudness they play at and where
+  /// their file was loaded from.
+  final Map<String, ({AudioPlayer player, double loudness, String origin})>
+      _players =
+      <String, ({AudioPlayer player, double loudness, String origin})>{};
 
   /// The cue map in effect.
   SoundCueMap get cues => _cues;
@@ -220,16 +222,19 @@ class SoundBoard {
         continue;
       }
       final String key = _key(file, c.loudness);
+      final String origin = _localFiles[file] ?? 'bundled';
       keep.add(key);
-      if (_players.containsKey(key)) {
-        // A local file may have changed on disk: load it afresh.
-        if (_localFiles.containsKey(file)) {
+      final ({AudioPlayer player, double loudness, String origin})? had =
+          _players[key];
+      if (had != null) {
+        // A local file may have changed on disk, appeared over a bundled one,
+        // or gone: load it afresh from wherever it now comes from.
+        if (had.origin != origin || _localFiles.containsKey(file)) {
           unawaited(
-            _safe(
-              () => _players[key]!.player.setSource(source),
-              label: 'reload $file',
-            ),
+            _safe(() => had.player.setSource(source), label: 'reload $file'),
           );
+          _players[key] =
+              (player: had.player, loudness: had.loudness, origin: origin);
         }
         continue;
       }
@@ -245,7 +250,7 @@ class SoundBoard {
           label: 'volume $file',
         ),
       );
-      _players[key] = (player: player, loudness: c.loudness);
+      _players[key] = (player: player, loudness: c.loudness, origin: origin);
     }
     for (final String key in _players.keys.toList()) {
       if (keep.contains(key)) continue;
@@ -329,7 +334,8 @@ class SoundBoard {
     if (clamped == _level) return _level;
     _level = clamped;
     final double gain = _gain;
-    for (final ({AudioPlayer player, double loudness}) p in _players.values) {
+    for (final ({AudioPlayer player, double loudness, String origin}) p
+        in _players.values) {
       unawaited(
         _safe(
           () => p.player.setVolume(gain * p.loudness),
@@ -368,7 +374,8 @@ class SoundBoard {
 
   /// Release the underlying players.
   Future<void> dispose() async {
-    for (final ({AudioPlayer player, double loudness}) p in _players.values) {
+    for (final ({AudioPlayer player, double loudness, String origin}) p
+        in _players.values) {
       await _safe(p.player.dispose);
     }
     _players.clear();

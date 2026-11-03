@@ -161,7 +161,7 @@ class SoundCueMap {
 # Save this file (or drop in a sound file) and the app reloads it.
 
 # --- Button press and hover -------------------------------------------------
-press                click.wav          0.6
+press                click.wav
 hover                tick_soft.wav      0.3   80
 
 # --- Alerts and dialogs ------------------------------------------------------
