@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
+import 'sound_cues.dart';
+
+export 'sound_cues.dart';
+
 /// A sound-cue theme — a directory of wavs under `assets/sounds/`. Each theme
 /// supplies a file for every [UiSound]; swapping a cue is just replacing its
 /// wav, and adding a theme is just adding a sibling directory (plus a value
@@ -136,22 +140,30 @@ enum UiSound {
 /// `V` + arrow hotkey.
 const int kMaxVolumeLevel = 10;
 
-/// Plays the bundled UI sound cues, with a discrete volume control.
+/// Plays the UI sound cues by name, through a soft-coded [SoundCueMap], with
+/// a discrete volume control.
+///
+/// A cue is played by name ([cue]); a [UiSound] is the cue of the same name
+/// ([play]). The map says which file each name plays, how loud, and how often
+/// at most; it starts as [SoundCueMap.defaults] and can be replaced at run
+/// time ([applyCues]), its files taken from a folder of the app's choosing
+/// before the bundled ones — so cues are swapped without a rebuild.
 ///
 /// Volume is an integer level from 0 ([kMaxVolumeLevel] steps). **Level 0 is
 /// silent and is exactly what "muted" means** — there is no separate mute
 /// flag; [muted] is simply `volumeLevel == 0`, and [toggleMute] drops to 0 and
 /// restores the prior level. The level maps linearly onto the underlying
-/// 0.0–1.0 player gain.
+/// 0.0–1.0 player gain, scaled by each cue's loudness.
 ///
 /// Resilient by construction: cues are display-only feedback, so any audio
-/// error (no device, plugin unavailable on a platform, asset hiccup) is
+/// error (no device, plugin unavailable on a platform, missing file) is
 /// swallowed and the board falls back to silence rather than disturbing the
 /// interaction. The cues carry no coordinate data and are never logged —
 /// consistent with the library's no-leak posture.
 ///
-/// One [AudioPlayer] per cue allows the short blips to overlap without one
-/// cutting another off. Construct once per session and [dispose] when done.
+/// One [AudioPlayer] per file and loudness lets short blips overlap without
+/// one cutting another off. Construct once per session and [dispose] when
+/// done.
 class SoundBoard {
   SoundBoard({
     bool muted = false,
@@ -160,36 +172,99 @@ class SoundBoard {
   })  : _level = muted ? 0 : volumeLevel.clamp(0, kMaxVolumeLevel),
         // Restore target for unmute — never 0, so unmuting always makes sound.
         _preMuteLevel = volumeLevel.clamp(1, kMaxVolumeLevel) {
-    for (final UiSound s in UiSound.values) {
+    applyCues(SoundCueMap.defaults);
+  }
+
+  /// The active cue theme: where the bundled files live,
+  /// `assets/sounds/<theme.dir>/`.
+  final SoundTheme theme;
+
+  /// Cache prefix that points at this package's bundled assets. Combined with
+  /// the per-file path below it yields `packages/great_wall_ux/assets/sounds/…`.
+  static const String _assetPrefix = 'packages/great_wall_ux/assets/';
+
+  /// The files bundled with every theme: one per [UiSound].
+  static final Set<String> bundledFiles = <String>{
+    for (final UiSound s in UiSound.values) s.asset,
+  };
+
+  SoundCueMap _cues = SoundCueMap(const <String, SoundCue>{});
+  Map<String, String> _localFiles = const <String, String>{};
+  final CueGate _gate = CueGate();
+
+  /// Players by source and loudness, with the loudness they play at.
+  final Map<String, ({AudioPlayer player, double loudness})> _players =
+      <String, ({AudioPlayer player, double loudness})>{};
+
+  /// The cue map in effect.
+  SoundCueMap get cues => _cues;
+
+  /// Use [map] from now on. [localFiles] maps a file name to its path on disk
+  /// (the app's cue folder); those are played before the bundled files of the
+  /// same name. Returns the files [map] names that neither provides — their
+  /// cues stay silent.
+  List<String> applyCues(
+    SoundCueMap map, {
+    Map<String, String> localFiles = const <String, String>{},
+  }) {
+    _cues = map;
+    _localFiles = Map<String, String>.of(localFiles);
+    final List<String> missing = <String>[];
+    final Set<String> keep = <String>{};
+    for (final SoundCue c in map.entries.values) {
+      final String? file = c.file;
+      if (file == null) continue;
+      final Source? source = _sourceFor(file);
+      if (source == null) {
+        if (!missing.contains(file)) missing.add(file);
+        continue;
+      }
+      final String key = _key(file, c.loudness);
+      keep.add(key);
+      if (_players.containsKey(key)) {
+        // A local file may have changed on disk: load it afresh.
+        if (_localFiles.containsKey(file)) {
+          unawaited(
+            _safe(
+              () => _players[key]!.player.setSource(source),
+              label: 'reload $file',
+            ),
+          );
+        }
+        continue;
+      }
       final AudioPlayer player = AudioPlayer()
         ..setReleaseMode(ReleaseMode.stop)
         // Resolve assets relative to this package, not the consuming app.
         ..audioCache = AudioCache(prefix: _assetPrefix);
-      // Pre-resolve the bundled asset so the first play is not delayed.
-      unawaited(_safe(
-        () => player.setSource(_sourceFor(s)),
-        label: 'preload ${s.asset}',
-      ));
-      // Seed the player gain to the starting level.
-      unawaited(_safe(
-        () => player.setVolume(_gain),
-        label: 'volume ${s.asset}',
-      ));
-      _players[s] = player;
+      // Pre-resolve the source so the first play is not delayed.
+      unawaited(_safe(() => player.setSource(source), label: 'preload $file'));
+      unawaited(
+        _safe(
+          () => player.setVolume(_gain * c.loudness),
+          label: 'volume $file',
+        ),
+      );
+      _players[key] = (player: player, loudness: c.loudness);
     }
+    for (final String key in _players.keys.toList()) {
+      if (keep.contains(key)) continue;
+      final AudioPlayer p = _players.remove(key)!.player;
+      unawaited(_safe(p.dispose, label: 'dispose $key'));
+    }
+    return missing;
   }
 
-  /// The active cue theme. Fixed at construction for now (selection is a future
-  /// step); cues resolve to `assets/sounds/<theme.dir>/<cue.asset>`.
-  final SoundTheme theme;
+  String _key(String file, double loudness) => '$file@$loudness';
 
-  /// Cache prefix that points at this package's bundled assets. Combined with
-  /// the per-cue path below it yields `packages/great_wall_ux/assets/sounds/…`.
-  static const String _assetPrefix = 'packages/great_wall_ux/assets/';
-
-  AssetSource _sourceFor(UiSound s) => AssetSource('sounds/${theme.dir}/${s.asset}');
-
-  final Map<UiSound, AudioPlayer> _players = <UiSound, AudioPlayer>{};
+  Source? _sourceFor(String file) {
+    final String? local = _localFiles[file];
+    if (local != null) return DeviceFileSource(local);
+    if (bundledFiles.contains(file)) {
+      return AssetSource('sounds/${theme.dir}/$file');
+    }
+    return null;
+  }
 
   /// Current volume level, 0..[kMaxVolumeLevel].
   int _level;
@@ -254,16 +329,30 @@ class SoundBoard {
     if (clamped == _level) return _level;
     _level = clamped;
     final double gain = _gain;
-    for (final AudioPlayer p in _players.values) {
-      unawaited(_safe(() => p.setVolume(gain), label: 'setVolume'));
+    for (final ({AudioPlayer player, double loudness}) p in _players.values) {
+      unawaited(
+        _safe(
+          () => p.player.setVolume(gain * p.loudness),
+          label: 'setVolume',
+        ),
+      );
     }
     return _level;
   }
 
-  /// Play [sound], unless silent (volume 0). Never throws.
-  void play(UiSound sound) {
+  /// Play [sound]: the cue of the same name. Never throws.
+  void play(UiSound sound) => cue(sound.name);
+
+  /// Play the cue called [name] (see [SoundCueMap.resolve]), unless the board
+  /// is silent, the cue is, or it played less than its minimum gap ago. Never
+  /// throws.
+  void cue(String name) {
     if (_level == 0) return;
-    final AudioPlayer? player = _players[sound];
+    final ({String name, SoundCue cue})? line = _cues.resolve(name);
+    final String? file = line?.cue.file;
+    if (line == null || file == null) return;
+    if (!_gate.allow(line.name, line.cue.minGap)) return;
+    final AudioPlayer? player = _players[_key(file, line.cue.loudness)]?.player;
     if (player == null) return;
     // Replay the already-loaded source: rewind then resume. This is the
     // low-latency desktop pattern and avoids re-preparing the GStreamer
@@ -273,14 +362,14 @@ class SoundBoard {
         await player.seek(Duration.zero);
         await player.resume();
       },
-      label: 'play ${sound.asset}',
+      label: 'play $file',
     ));
   }
 
   /// Release the underlying players.
   Future<void> dispose() async {
-    for (final AudioPlayer p in _players.values) {
-      await _safe(p.dispose);
+    for (final ({AudioPlayer player, double loudness}) p in _players.values) {
+      await _safe(p.player.dispose);
     }
     _players.clear();
   }

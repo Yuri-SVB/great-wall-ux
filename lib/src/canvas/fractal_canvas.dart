@@ -43,7 +43,8 @@ const double _kExposureSame = 0.01;
 /// composited on top.
 ///
 /// Gesture handling unifies pointer, touch, mouse, and trackpad through
-/// Flutter's gesture arena. Tap dispatches a select-mode event. Scroll zooms.
+/// Flutter's gesture arena. Tap dispatches a select-mode event. Scroll zooms,
+/// voicing [kCueZoomIn] / [kCueZoomOut] through [sounds].
 ///
 /// With the [BrightnessController]'s auto exposure on, the canvas fits offset
 /// and slope to every raster it receives ([screenExposure]) and eases toward
@@ -509,7 +510,10 @@ class _FractalCanvasState extends State<FractalCanvas>
 
   void _handlePointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) return;
-    final double factor = event.scrollDelta.dy < 0 ? 1.1 : 1 / 1.1;
+    final bool zoomIn = event.scrollDelta.dy < 0;
+    // Rate-limited by the cue map, as scroll events come in bursts.
+    widget.sounds?.cue(zoomIn ? kCueZoomIn : kCueZoomOut);
+    final double factor = zoomIn ? 1.1 : 1 / 1.1;
     widget.controller.zoomBy(
       factor,
       fx: event.localPosition.dx,
