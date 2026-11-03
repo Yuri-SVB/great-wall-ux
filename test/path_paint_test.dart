@@ -72,6 +72,48 @@ void main() {
     expect(red(d, 90, 90), 0);
   });
 
+  testWidgets('the numbered markers and the line can be hidden',
+      (WidgetTester tester) async {
+    // Two stops whose markers sit on screen, apart from the highlight: at
+    // (25, 25) and (25, 75) in pixels, the line between them along x = 25.
+    CanvasPath twoStops({required bool numbers, required bool line}) =>
+        CanvasPath(
+          showNumbers: numbers,
+          showLine: line,
+          stops: <CanvasPathStop>[
+            for (final double im in <double>[-1, 1])
+              CanvasPathStop(re: -1, im: im, cells: path.stops.single.cells),
+          ],
+        );
+    Future<ByteData> paintPath(CanvasPath p) async {
+      final ui.PictureRecorder recorder = ui.PictureRecorder();
+      FractalCanvasPainter(
+        viewport: vp,
+        shader: null,
+        overlays: CanvasOverlays(path: p),
+        islandMask: null,
+        islandCells: const <CanvasIsland>[],
+        debugBisectionOverlay: false,
+        repaintTick: 0,
+      ).paint(Canvas(recorder), const Size(100, 100));
+      final ByteData? bytes = await tester.runAsync<ByteData>(() async {
+        final ui.Image image =
+            await recorder.endRecording().toImage(sizePx, sizePx);
+        final ByteData? data = await image.toByteData();
+        image.dispose();
+        return data!;
+      });
+      return bytes!;
+    }
+
+    final ByteData all = await paintPath(twoStops(numbers: true, line: true));
+    expect(red(all, 25 + 7, 25), greaterThan(0), reason: 'a marker');
+    expect(red(all, 25, 50), greaterThan(0), reason: 'the line');
+    final ByteData bare = await paintPath(twoStops(numbers: false, line: false));
+    expect(red(bare, 25 + 7, 25), 0, reason: 'no marker');
+    expect(red(bare, 25, 50), 0, reason: 'no line');
+  });
+
   testWidgets('large cells are drawn rounded', (WidgetTester tester) async {
     // 25 px a cell is past kOutlineSmoothFromPx: the corner is cut.
     final ByteData d = await paint(tester);
