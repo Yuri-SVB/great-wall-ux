@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 
 import '../audio/sound_board.dart';
 import '../gestures/pan_zoom_controller.dart';
@@ -44,18 +43,16 @@ const double _kExposureSame = 0.01;
 /// composited on top.
 ///
 /// Gesture handling unifies pointer, touch, mouse, and trackpad through
-/// Flutter's gesture arena. Tap dispatches a select-mode event. Scroll zooms;
-/// `L` + scroll adjusts the brightness offset and `G` + scroll its slope
-/// (tacit, never-displayed controls).
+/// Flutter's gesture arena. Tap dispatches a select-mode event. Scroll zooms,
+/// voicing [kCueZoomIn] / [kCueZoomOut] through [sounds].
 ///
 /// With the [BrightnessController]'s auto exposure on, the canvas fits offset
 /// and slope to every raster it receives ([screenExposure]) and eases toward
 /// the fit ([kAutoExposureEase]).
 ///
 /// Keyboard shortcuts are intentionally *not* handled here: a consuming app
-/// owns keyboard focus and routes shortcuts itself (the wallet app binds
-/// `V` + Up/Down to [SoundBoard] volume, for instance). The library's job is
-/// to render and to expose the controllers the host drives.
+/// owns keyboard focus and routes shortcuts itself. The library's job is to
+/// render and to expose the controllers the host drives.
 ///
 /// Accessibility: the canvas is a single opaque interactive node with no
 /// inner content description, deliberately.
@@ -513,21 +510,14 @@ class _FractalCanvasState extends State<FractalCanvas>
 
   void _handlePointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) return;
-    final HardwareKeyboard kb = HardwareKeyboard.instance;
-    final double up = event.scrollDelta.dy < 0 ? 1.0 : -1.0;
-    if (kb.isLogicalKeyPressed(LogicalKeyboardKey.keyL)) {
-      // Tacit brightness adjustment. Scroll up brightens the lit band.
-      _brightness.adjustBySteps(up);
-    } else if (kb.isLogicalKeyPressed(LogicalKeyboardKey.keyG)) {
-      // Tacit slope adjustment. Scroll up spreads the falloff (more shades).
-      _brightness.adjustSlopeBySteps(up);
-    } else {
-      final double factor = event.scrollDelta.dy < 0 ? 1.1 : 1 / 1.1;
-      widget.controller.zoomBy(
-        factor,
-        fx: event.localPosition.dx,
-        fy: event.localPosition.dy,
-      );
-    }
+    final bool zoomIn = event.scrollDelta.dy < 0;
+    // Rate-limited by the cue map, as scroll events come in bursts.
+    widget.sounds?.cue(zoomIn ? kCueZoomIn : kCueZoomOut);
+    final double factor = zoomIn ? 1.1 : 1 / 1.1;
+    widget.controller.zoomBy(
+      factor,
+      fx: event.localPosition.dx,
+      fy: event.localPosition.dy,
+    );
   }
 }
