@@ -217,7 +217,9 @@ const double kPathLabelSizePx = 11.0;
 const double kPathHighlightOpacity = 0.45;
 
 /// A landmark path: a line through its stops' centres, each stop numbered
-/// from 1, and each stop's feature highlighted.
+/// from 1, and each stop's feature highlighted. The line and the numbered
+/// markers can each be hidden ([showLine], [showNumbers]); the highlights
+/// always show.
 ///
 /// Compared by identity: a host keeps one object per path, and the canvas
 /// re-fills the highlights only when it changes.
@@ -231,6 +233,8 @@ class CanvasPath {
     this.stopRadiusPx = kPathStopRadiusPx,
     this.labelSizePx = kPathLabelSizePx,
     this.highlightOpacity = kPathHighlightOpacity,
+    this.showLine = true,
+    this.showNumbers = true,
   });
 
   final List<CanvasPathStop> stops;
@@ -244,6 +248,12 @@ class CanvasPath {
   final double stopRadiusPx;
   final double labelSizePx;
   final double highlightOpacity;
+
+  /// Whether the line through the stops is drawn.
+  final bool showLine;
+
+  /// Whether the stops' numbered markers are drawn.
+  final bool showNumbers;
 }
 
 /// All overlays paintable on the canvas for one frame.

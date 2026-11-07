@@ -3,8 +3,8 @@
 // the actual Burning Ship raster.
 //
 // Demonstrates the locked surface: the GPU colour pipeline, the rotary hue
-// wheel, L+scroll brightness (a tacit control with no on-screen value), and
-// V+Up/Down sound-cue volume (level 0 == muted).
+// wheel, brightness steps (no on-screen value), and V+Up/Down sound-cue
+// volume (level 0 == muted).
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -128,8 +128,22 @@ class _HomeState extends State<_Home> {
                       onChanged: (int n) => setState(() => _stages = n),
                     ),
                     const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        IconButton(
+                          tooltip: 'Darker',
+                          icon: const Icon(Icons.brightness_low),
+                          onPressed: () => _brightness.adjustBySteps(-1),
+                        ),
+                        IconButton(
+                          tooltip: 'Brighter',
+                          icon: const Icon(Icons.brightness_high),
+                          onPressed: () => _brightness.adjustBySteps(1),
+                        ),
+                      ],
+                    ),
                     const Text(
-                      'Hold L and scroll to adjust brightness.\n'
                       'Hold V and press Up/Down to change volume.',
                       textAlign: TextAlign.center,
                     ),

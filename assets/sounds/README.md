@@ -6,17 +6,25 @@ Short UI sound cues for the "sober, but game-like" interaction surface
 
 ## How it's organised
 
-Each **theme** is a directory under `assets/sounds/` holding one wav per cue.
-The active theme defaults to `sober/`; theme *selection* is a later step. To
-**change a cue, just replace its wav** in the theme directory — the filename is
-the contract; no code or pubspec change is needed (the directory is declared
-wholesale in `pubspec.yaml`). To **add a theme**, copy `sober/` to a sibling
-directory, swap the wavs, add a `SoundTheme` value and a pubspec line.
+Each **theme** is a directory under `assets/sounds/` holding one wav per
+`UiSound`; `sober/` is the default.
 
-First cut: every cue is a copy of one of the four base primitives, so the cue
-set sounds uniform today. They are meant to diverge — that's why each has its
-own file. Played through the `SoundBoard` controller; volume is a discrete level
-(`0` = silent = muted). Display-only feedback, never logged.
+Which file a cue plays is **soft-coded**: `SoundCueMap` (`lib/src/audio/
+sound_cues.dart`) maps cue names to files, with loudness and a minimum gap
+between repeats, as a plain-text table. A name falls back to its dotted parent
+(`press.setup.dice` → `press.setup` → `press`), and `-` silences a cue. The
+built-in map (`SoundCueMap.defaultText`) voices every `UiSound` with its own
+file, and the newer families — button press and hover, alerts, dialogs,
+function keys, zoom by scrolling — with placeholders reusing those files.
+
+An app swaps cues at run time with `SoundBoard.applyCues`: its own map over the
+defaults, its files played before the bundled ones (the wallet watches a folder
+for both). Bundled files still change by replacing a wav here and rebuilding.
+
+First cut: every bundled cue is a copy of one of the four base primitives, so
+the set sounds uniform today. They are meant to diverge — that's why each has
+its own file. Volume is a discrete level (`0` = silent = muted). Display-only
+feedback, never logged; a cue never depends on secret content.
 
 ## Cues (`sober/`)
 

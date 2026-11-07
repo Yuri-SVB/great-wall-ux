@@ -175,7 +175,7 @@ class FractalCanvasPainter extends CustomPainter {
           return Offset(x, y);
         }(),
     ];
-    if (at.length > 1) {
+    if (path.showLine && at.length > 1) {
       canvas.drawPath(
         Path()..addPolygon(at, false),
         Paint()
@@ -184,6 +184,7 @@ class FractalCanvasPainter extends CustomPainter {
           ..color = path.colour,
       );
     }
+    if (!path.showNumbers) return;
     final Paint disc = Paint()..color = path.colour;
     for (int k = 0; k < at.length; k++) {
       canvas.drawCircle(at[k], path.stopRadiusPx, disc);
