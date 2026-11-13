@@ -195,12 +195,17 @@ class CanvasPathStop {
     required this.re,
     required this.im,
     required this.cells,
+    this.dimmed = false,
   });
 
   /// The stop's centre (its feature's barycentre), in fractal coordinates.
   final double re;
   final double im;
   final CanvasCells cells;
+
+  /// Whether the stop is drawn dimmed ([CanvasPath.dimFactor]): on the
+  /// route, but set apart from the stops that matter now.
+  final bool dimmed;
 }
 
 /// Default stroke width of a path's line, in screen pixels.
@@ -215,6 +220,10 @@ const double kPathLabelSizePx = 11.0;
 /// Default opacity of a path's feature highlights: translucent, so the
 /// fractal stays visible beneath them.
 const double kPathHighlightOpacity = 0.45;
+
+/// Default opacity of a dimmed stop, relative to a stop's: its highlight,
+/// its marker and the line to it.
+const double kPathDimFactor = 0.35;
 
 /// A landmark path: a line through its stops' centres, each stop numbered
 /// from 1, and each stop's feature highlighted. The line and the numbered
@@ -233,6 +242,7 @@ class CanvasPath {
     this.stopRadiusPx = kPathStopRadiusPx,
     this.labelSizePx = kPathLabelSizePx,
     this.highlightOpacity = kPathHighlightOpacity,
+    this.dimFactor = kPathDimFactor,
     this.showLine = true,
     this.showNumbers = true,
   });
@@ -248,6 +258,10 @@ class CanvasPath {
   final double stopRadiusPx;
   final double labelSizePx;
   final double highlightOpacity;
+
+  /// Opacity of a dimmed stop ([CanvasPathStop.dimmed]), relative to a
+  /// stop's.
+  final double dimFactor;
 
   /// Whether the line through the stops is drawn.
   final bool showLine;

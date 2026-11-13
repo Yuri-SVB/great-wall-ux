@@ -165,9 +165,11 @@ class FractalCanvasPainter extends CustomPainter {
   }
 
   /// The landmark path: its highlights, then the line through its stops,
-  /// then the stops numbered from 1.
+  /// then the stops numbered from 1. Dimmed stops, and the line to them, are
+  /// drawn at [CanvasPath.dimFactor] of the opacity.
   void _paintPath(Canvas canvas, Size size, ViewportMath math, CanvasPath path) {
-    _paintHighlights(canvas, size, math, path);
+    _paintHighlights(canvas, size, math, path, dimmed: false);
+    _paintHighlights(canvas, size, math, path, dimmed: true);
     final List<Offset> at = <Offset>[
       for (final CanvasPathStop s in path.stops)
         () {
@@ -175,24 +177,34 @@ class FractalCanvasPainter extends CustomPainter {
           return Offset(x, y);
         }(),
     ];
-    if (path.showLine && at.length > 1) {
-      canvas.drawPath(
-        Path()..addPolygon(at, false),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = path.lineWidthPx
-          ..color = path.colour,
-      );
+    Color dimmable(Color c, bool dimmed) =>
+        dimmed ? c.withValues(alpha: c.a * path.dimFactor) : c;
+    if (path.showLine) {
+      for (int k = 1; k < at.length; k++) {
+        canvas.drawLine(
+          at[k - 1],
+          at[k],
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = path.lineWidthPx
+            ..strokeCap = StrokeCap.round // segments meet without notches
+            ..color = dimmable(path.colour, path.stops[k].dimmed),
+        );
+      }
     }
     if (!path.showNumbers) return;
-    final Paint disc = Paint()..color = path.colour;
     for (int k = 0; k < at.length; k++) {
-      canvas.drawCircle(at[k], path.stopRadiusPx, disc);
+      final bool dimmed = path.stops[k].dimmed;
+      canvas.drawCircle(
+        at[k],
+        path.stopRadiusPx,
+        Paint()..color = dimmable(path.colour, dimmed),
+      );
       final TextPainter label = TextPainter(
         text: TextSpan(
           text: '${k + 1}',
           style: TextStyle(
-            color: path.labelColour,
+            color: dimmable(path.labelColour, dimmed),
             fontSize: path.labelSizePx,
             fontWeight: FontWeight.bold,
           ),
@@ -207,20 +219,32 @@ class FractalCanvasPainter extends CustomPainter {
   /// Each stop's feature, filled from its outline ([outlineOf]): rounded once
   /// a cell spans [kOutlineSmoothFromPx] pixels, its corner loops below that.
   /// The stops share one translucent layer, so overlapping features read as
-  /// one highlight.
+  /// one highlight; the [dimmed] ones share another, fainter.
   void _paintHighlights(
     Canvas canvas,
     Size size,
     ViewportMath math,
-    CanvasPath path,
-  ) {
+    CanvasPath path, {
+    required bool dimmed,
+  }) {
+    final List<CanvasPathStop> stops = <CanvasPathStop>[
+      for (final CanvasPathStop s in path.stops)
+        if (s.dimmed == dimmed) s,
+    ];
+    if (stops.isEmpty) return;
     final Rect screen = Offset.zero & size;
     final Paint opaque = Paint()..color = path.colour;
     canvas.saveLayer(
       screen,
-      Paint()..color = Color.fromRGBO(0, 0, 0, path.highlightOpacity),
+      Paint()
+        ..color = Color.fromRGBO(
+          0,
+          0,
+          0,
+          path.highlightOpacity * (dimmed ? path.dimFactor : 1),
+        ),
     );
-    for (final CanvasPathStop s in path.stops) {
+    for (final CanvasPathStop s in stops) {
       final CanvasCells c = s.cells;
       // The grid's corner (0, 0) on screen, and one cell along each axis.
       final double half = c.cellSize / 2.0;

@@ -114,6 +114,67 @@ void main() {
     expect(red(bare, 25, 50), 0, reason: 'no line');
   });
 
+  testWidgets('a dimmed stop is drawn fainter', (WidgetTester tester) async {
+    // Two stops whose markers sit on screen at (25, 75) and (25, 25) in
+    // pixels, the first dimmed; and the same path with neither dimmed.
+    CanvasPath twoStops({required bool dimFirst}) => CanvasPath(
+          stops: <CanvasPathStop>[
+            for (final double im in <double>[1, -1])
+              CanvasPathStop(
+                re: -1,
+                im: im,
+                cells: path.stops.single.cells,
+                dimmed: dimFirst && im > 0,
+              ),
+          ],
+        );
+    Future<ByteData> paintPath(CanvasPath p) async {
+      final ui.PictureRecorder recorder = ui.PictureRecorder();
+      FractalCanvasPainter(
+        viewport: vp,
+        shader: null,
+        overlays: CanvasOverlays(path: p),
+        islandMask: null,
+        islandCells: const <CanvasIsland>[],
+        debugBisectionOverlay: false,
+        repaintTick: 0,
+      ).paint(Canvas(recorder), const Size(100, 100));
+      final ByteData? bytes = await tester.runAsync<ByteData>(() async {
+        final ui.Image image =
+            await recorder.endRecording().toImage(sizePx, sizePx);
+        final ByteData? data = await image.toByteData();
+        image.dispose();
+        return data!;
+      });
+      return bytes!;
+    }
+
+    final ByteData plain = await paintPath(twoStops(dimFirst: false));
+    final ByteData dim = await paintPath(twoStops(dimFirst: true));
+    // The first stop's marker (a ring outside its number), fainter dimmed.
+    expect(red(dim, 25 + 7, 75), lessThan(red(plain, 25 + 7, 75)));
+    expect(red(dim, 25 + 7, 75), greaterThan(0));
+    // The second stop's marker as it was.
+    expect(red(dim, 25 + 7, 25), red(plain, 25 + 7, 25));
+    // A dimmed stop's highlight, fainter.
+    final CanvasPathStop only = path.stops.single;
+    final ByteData faint = await paintPath(
+      CanvasPath(
+        stops: <CanvasPathStop>[
+          CanvasPathStop(
+            re: only.re,
+            im: only.im,
+            cells: only.cells,
+            dimmed: true,
+          ),
+        ],
+      ),
+    );
+    final ByteData full = await paintPath(path);
+    expect(red(faint, 62, 62), lessThan(red(full, 62, 62)));
+    expect(red(faint, 62, 62), greaterThan(0));
+  });
+
   testWidgets('large cells are drawn rounded', (WidgetTester tester) async {
     // 25 px a cell is past kOutlineSmoothFromPx: the corner is cut.
     final ByteData d = await paint(tester);
